@@ -1,0 +1,338 @@
+---
+title: "Utility methods"
+description: "Helper methods for snapshots, rewind capture, pose conversion, debugging, and USB setup."
+---
+
+## Snapshot and capture
+
+### `triggerSnapshot`
+
+Triggers a snapshot by incrementing the snapshot counter in NetworkTables. The Limelight rate-limits snapshot captures to once per 10 frames.
+
+```java
+LimelightHelpers.triggerSnapshot("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+---
+
+### `setRewindEnabled`
+
+Enables or pauses the rewind buffer recording. When enabled, the camera continuously records frames to a rolling buffer.
+
+```java
+// Start recording
+LimelightHelpers.setRewindEnabled("limelight", true);
+
+// Pause recording
+LimelightHelpers.setRewindEnabled("limelight", false);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="enabled" type="boolean" required>
+  `true` to enable rewind recording, `false` to pause it.
+</ParamField>
+
+---
+
+### `triggerRewindCapture`
+
+Triggers a rewind capture of the specified duration. The maximum duration is 165 seconds; values above this are clamped. The Limelight rate-limits this operation internally.
+
+```java
+// Capture the last 10 seconds
+LimelightHelpers.triggerRewindCapture("limelight", 10.0);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="durationSeconds" type="double" required>
+  Duration of the rewind capture in seconds. Clamped to a maximum of `165.0`.
+</ParamField>
+
+---
+
+## Pose conversion
+
+These static utility methods convert between the 6-element `double[]` format used by NetworkTables and WPILib geometry types. The array format is always `[x, y, z, roll, pitch, yaw]` where translations are in meters and angles are in degrees.
+
+### `toPose3D`
+
+Converts a 6-element pose array to a `Pose3d` object.
+
+```java
+double[] poseArray = LimelightHelpers.getBotPose_wpiBlue("limelight");
+Pose3d pose3d = LimelightHelpers.toPose3D(poseArray);
+
+System.out.println("X: " + pose3d.getX());
+System.out.println("Yaw: " + pose3d.getRotation().getZ()); // radians
+```
+
+<ParamField path="inData" type="double[]" required>
+  6-element array `[x, y, z, roll, pitch, yaw]`. Angles must be in degrees.
+</ParamField>
+
+<ResponseField name="returns" type="Pose3d">
+  A `Pose3d` with translation in meters and rotation in radians (converted internally). Returns an empty `Pose3d` if the array has fewer than 6 elements.
+</ResponseField>
+
+---
+
+### `toPose2D`
+
+Converts a 6-element pose array to a `Pose2d` object. Only x, y, and yaw are used; z, roll, and pitch are ignored.
+
+```java
+double[] poseArray = LimelightHelpers.getBotPose_wpiBlue("limelight");
+Pose2d pose2d = LimelightHelpers.toPose2D(poseArray);
+
+System.out.println("X: " + pose2d.getX());
+System.out.println("Yaw: " + pose2d.getRotation().getDegrees() + "°");
+```
+
+<ParamField path="inData" type="double[]" required>
+  6-element array `[x, y, z, roll, pitch, yaw]`. Angles must be in degrees.
+</ParamField>
+
+<ResponseField name="returns" type="Pose2d">
+  A `Pose2d` using x, y, and yaw (converted to radians). Returns an empty `Pose2d` if the array has fewer than 6 elements.
+</ResponseField>
+
+---
+
+### `pose3dToArray`
+
+Converts a `Pose3d` object to a 6-element array. This is the inverse of `toPose3D`.
+
+```java
+Pose3d pose = new Pose3d(1.0, 2.0, 0.5, new Rotation3d(0, 0, Math.PI / 2));
+double[] array = LimelightHelpers.pose3dToArray(pose);
+// array = [1.0, 2.0, 0.5, 0.0, 0.0, 90.0]
+```
+
+<ParamField path="pose" type="Pose3d" required>
+  The `Pose3d` to convert.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  6-element array `[x, y, z, roll, pitch, yaw]`. Translations are in meters; rotations are in degrees.
+</ResponseField>
+
+---
+
+### `pose2dToArray`
+
+Converts a `Pose2d` object to a 6-element array. z, roll, and pitch are always `0`. This is the inverse of `toPose2D`.
+
+```java
+Pose2d pose = new Pose2d(1.0, 2.0, Rotation2d.fromDegrees(45.0));
+double[] array = LimelightHelpers.pose2dToArray(pose);
+// array = [1.0, 2.0, 0.0, 0.0, 0.0, 45.0]
+```
+
+<ParamField path="pose" type="Pose2d" required>
+  The `Pose2d` to convert.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  6-element array `[x, y, 0, 0, 0, yaw]`. Translations are in meters; yaw is in degrees.
+</ResponseField>
+
+---
+
+### Round-trip pattern
+
+Use `pose3dToArray` and `toPose3D` (or their 2D equivalents) when storing or transmitting poses through NT or logging pipelines that require the flat array format:
+
+```java
+// Store a known camera offset as an array, then reconstruct later
+Pose3d cameraOffset = new Pose3d(0.3, 0.0, 0.2,
+    new Rotation3d(0, Math.toRadians(-30), 0));
+
+double[] stored = LimelightHelpers.pose3dToArray(cameraOffset);
+// Persist or log `stored` ...
+
+// Reconstruct
+Pose3d restored = LimelightHelpers.toPose3D(stored);
+
+// 2D equivalent
+Pose2d pose2d = new Pose2d(1.5, 2.0, Rotation2d.fromDegrees(90));
+double[] arr2d = LimelightHelpers.pose2dToArray(pose2d);
+Pose2d roundTripped = LimelightHelpers.toPose2D(arr2d);
+```
+
+---
+
+## Debugging
+
+### `printPoseEstimate`
+
+Prints detailed information about a `PoseEstimate` to standard output. Useful for quick field-side debugging.
+
+Output includes: timestamp (s), latency (ms), tag count, tag span (m), average tag distance (m), average tag area (%), `isMegaTag2` flag, and per-fiducial details (ID, txnc, tync, ta, distance to camera/robot, ambiguity).
+
+```java
+LimelightHelpers.PoseEstimate estimate =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue("limelight");
+
+LimelightHelpers.printPoseEstimate(estimate);
+// Pose Estimate Information:
+// Timestamp (Seconds): 15.234
+// Latency: 12.500 ms
+// Tag Count: 2
+// Tag Span: 3.12 meters
+// Average Tag Distance: 2.45 meters
+// Average Tag Area: 4.80% of image
+// Is MegaTag2: false
+//
+// Raw Fiducials Details:
+//  Fiducial #1:
+//   ID: 7
+//   TXNC: -2.34
+//   ...
+```
+
+If `pose` is `null`, prints `"No PoseEstimate available."` and returns immediately.
+
+<ParamField path="pose" type="PoseEstimate" required>
+  The `PoseEstimate` to print. Safe to call with `null`.
+</ParamField>
+
+---
+
+### `validPoseEstimate`
+
+Returns `true` if the `PoseEstimate` is non-null and contains at least one fiducial result. Use this before passing an estimate to the WPILib pose estimator.
+
+```java
+LimelightHelpers.PoseEstimate estimate =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+
+if (LimelightHelpers.validPoseEstimate(estimate)) {
+    poseEstimator.addVisionMeasurement(
+        estimate.pose,
+        estimate.timestampSeconds
+    );
+}
+```
+
+<ParamField path="pose" type="PoseEstimate" required>
+  The `PoseEstimate` to validate.
+</ParamField>
+
+<ResponseField name="returns" type="Boolean">
+  `true` if `pose` is non-null and `pose.rawFiducials` is non-empty. `false` otherwise.
+</ResponseField>
+
+---
+
+## Network and connection
+
+### `getHeartbeat`
+
+Returns a counter that increments once per frame. If this value stops changing, the camera is likely disconnected or has stopped publishing.
+
+```java
+double heartbeat = LimelightHelpers.getHeartbeat("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Monotonically increasing frame counter. Verify the camera is alive by checking that this value changes between periodic cycles.
+</ResponseField>
+
+---
+
+### `setupPortForwardingUSB`
+
+Sets up PortForwarder entries so a USB-connected Limelight 3A or 3G is reachable from the driver station or development machine.
+
+Call this method **once** in `robotInit()`. Do not call it in a periodic loop.
+
+| USB index | Forwarded ports | Limelight IP |
+|-----------|-----------------|--------------|
+| 0 | 5800–5809 | 172.29.0.1 |
+| 1 | 5810–5819 | 172.29.1.1 |
+| 2 | 5820–5829 | 172.29.2.1 |
+
+After calling this method, access the Limelight web interface at `roboRIO-<team>-FRC.local:5801` (index 0) or `roboRIO-<team>-FRC.local:5811` (index 1).
+
+```java
+@Override
+public void robotInit() {
+    // Single Limelight 3G over USB
+    LimelightHelpers.setupPortForwardingUSB(0);
+
+    // Two Limelights over USB
+    LimelightHelpers.setupPortForwardingUSB(0);
+    LimelightHelpers.setupPortForwardingUSB(1);
+}
+```
+
+<ParamField path="usbIndex" type="int" required>
+  Zero-based index of the USB-connected Limelight. `0` forwards ports 5800–5809 to `172.29.0.1`; `1` forwards ports 5810–5819 to `172.29.1.1`, and so on.
+</ParamField>
+
+---
+
+### `Flush`
+
+Calls `NetworkTableInstance.getDefault().flush()` to immediately push pending NT writes to the network. Used internally by `SetRobotOrientation` to ensure the orientation value reaches the camera before the next pose read.
+
+```java
+LimelightHelpers.Flush();
+```
+
+Call this manually after `SetRobotOrientation_NoFlush` when you want to control flush timing yourself.
+
+---
+
+## IMU
+
+### `getIMUData`
+
+Returns the current IMU data from the Limelight as an `IMUData` object. Returns an all-zeros object if the data is unavailable or the raw array has fewer than 10 elements.
+
+```java
+LimelightHelpers.IMUData imu = LimelightHelpers.getIMUData("limelight");
+
+System.out.println("Robot Yaw: " + imu.robotYaw);
+System.out.println("Pitch: "     + imu.Pitch);
+System.out.println("Roll: "      + imu.Roll);
+System.out.println("Gyro X: "    + imu.gyroX);
+System.out.println("Accel Z: "   + imu.accelZ);
+```
+
+The `IMUData` fields map to the raw NT array as follows:
+
+| Field | Array index |
+|-------|-------------|
+| `robotYaw` | 0 |
+| `Roll` | 1 |
+| `Pitch` | 2 |
+| `Yaw` | 3 |
+| `gyroX` | 4 |
+| `gyroY` | 5 |
+| `gyroZ` | 6 |
+| `accelX` | 7 |
+| `accelY` | 8 |
+| `accelZ` | 9 |
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="IMUData">
+  `IMUData` object populated from the `imu` NetworkTables array. All fields are `0.0` if data is unavailable.
+</ResponseField>

@@ -1,0 +1,225 @@
+---
+title: "AprilTag localization"
+description: "Use AprilTag fiducials to estimate your robot's position on the FRC field."
+---
+
+AprilTag (fiducial) tracking lets you compute your robot's absolute position on the FRC field. Limelight detects the 3D pose of one or more AprilTags and solves for where the robot must be to have seen them from that angle and distance.
+
+There are two approaches to AprilTag-based localization:
+
+- **MegaTag1** — multi-tag pose estimation using only vision data. Works with any number of tags but can suffer from pose ambiguity when only one tag is visible.
+- **MegaTag2** — gyro-fused pose estimation. Uses your robot's gyroscope to resolve pose ambiguity. Recommended for most teams. See the [MegaTag2 guide](/guides/megatag2) for full setup details.
+
+## Getting pose estimates
+
+<Tabs>
+  <Tab title="MegaTag1">
+    MegaTag1 uses only vision data to compute the robot pose. It is more reliable when two or more tags are visible simultaneously.
+
+    ```java
+    // Blue alliance frame (recommended)
+    LimelightHelpers.PoseEstimate mt1 =
+        LimelightHelpers.getBotPoseEstimate_wpiBlue("limelight");
+
+    // Red alliance frame
+    LimelightHelpers.PoseEstimate mt1Red =
+        LimelightHelpers.getBotPoseEstimate_wpiRed("limelight");
+    ```
+  </Tab>
+  <Tab title="MegaTag2">
+    MegaTag2 requires you to call `SetRobotOrientation()` every loop cycle before reading the estimate.
+
+    ```java
+    // Send gyro yaw to Limelight before reading
+    LimelightHelpers.SetRobotOrientation(
+        "limelight",
+        gyro.getYaw(), 0, 0, 0, 0, 0
+    );
+
+    // Blue alliance frame (recommended)
+    LimelightHelpers.PoseEstimate mt2 =
+        LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+    ```
+
+    See the [MegaTag2 guide](/guides/megatag2) for complete integration details.
+  </Tab>
+</Tabs>
+
+### The `PoseEstimate` object
+
+Both methods return a `PoseEstimate` with the following fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `pose` | `Pose2d` | Robot pose in field space |
+| `timestampSeconds` | `double` | Timestamp adjusted for latency (use with `addVisionMeasurement`) |
+| `latency` | `double` | Total pipeline + capture latency in milliseconds |
+| `tagCount` | `int` | Number of tags used in this estimate |
+| `tagSpan` | `double` | Distance between outermost detected tags in meters |
+| `avgTagDist` | `double` | Average distance to all detected tags in meters |
+| `avgTagArea` | `double` | Average tag area as a percentage of the image |
+| `rawFiducials` | `RawFiducial[]` | Per-tag details including ambiguity |
+| `isMegaTag2` | `boolean` | Whether this estimate came from MegaTag2 |
+
+<Tip>
+  Always use the WPILib Blue Alliance coordinate frame (`_wpiBlue` methods). The Blue Alliance origin is consistent regardless of which alliance you are on, which simplifies path planning and odometry. Match the frame you pass to `addVisionMeasurement()`.
+</Tip>
+
+## Filtering pose estimates
+
+Raw pose estimates should be filtered before being fed into the pose estimator. At minimum, check:
+
+```java
+LimelightHelpers.PoseEstimate mt1 =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue("limelight");
+
+if (mt1 != null
+        && mt1.tagCount >= 1
+        && mt1.avgTagDist < 4.0   // meters
+        && mt1.tagSpan > 0) {
+    poseEstimator.addVisionMeasurement(
+        mt1.pose,
+        mt1.timestampSeconds
+    );
+}
+```
+
+| Condition | Recommended threshold | Reason |
+|---|---|---|
+| `tagCount >= 1` | At least 1 tag | No tags means no valid estimate |
+| `avgTagDist < 4.0` | 4 meters | Accuracy drops sharply at long range |
+| `tagSpan > 0` | Any positive value | Guards against degenerate single-tag geometry |
+
+<Warning>
+  When only one tag is visible, MegaTag1 can produce two equally valid but physically different poses (pose ambiguity). Check `rawFiducials[i].ambiguity` for each tag. If `ambiguity > 0.1`, the estimate is unreliable. Use MegaTag2 instead, which uses the gyro to eliminate this ambiguity.
+</Warning>
+
+## Integrating with `SwerveDrivePoseEstimator`
+
+<Steps>
+  <Step title="Declare the pose estimator">
+    ```java
+    SwerveDrivePoseEstimator poseEstimator = new SwerveDrivePoseEstimator(
+        kinematics,
+        gyro.getRotation2d(),
+        modulePositions,
+        new Pose2d()
+    );
+    ```
+  </Step>
+  <Step title="Update odometry every loop">
+    ```java
+    // In robotPeriodic() or your drive subsystem's periodic()
+    poseEstimator.update(
+        gyro.getRotation2d(),
+        modulePositions
+    );
+    ```
+  </Step>
+  <Step title="Read and validate the Limelight estimate">
+    ```java
+    LimelightHelpers.PoseEstimate mt1 =
+        LimelightHelpers.getBotPoseEstimate_wpiBlue("limelight");
+
+    boolean validEstimate = mt1 != null
+        && mt1.tagCount >= 1
+        && mt1.avgTagDist < 4.0
+        && mt1.tagSpan > 0;
+    ```
+  </Step>
+  <Step title="Fuse vision into the estimator">
+    ```java
+    if (validEstimate) {
+        // Standard deviations: tighter = trust vision more
+        // [x meters, y meters, heading radians]
+        Matrix<N3, N1> stdDevs = VecBuilder.fill(0.5, 0.5, 999);
+
+        poseEstimator.addVisionMeasurement(
+            mt1.pose,
+            mt1.timestampSeconds,
+            stdDevs
+        );
+    }
+    ```
+  </Step>
+</Steps>
+
+## Per-tag results
+
+### Via JSON (`getLatestResults`)
+
+For detailed per-tag data including full 3D pose transforms, parse the JSON output:
+
+```java
+LimelightHelpers.LimelightResults results =
+    LimelightHelpers.getLatestResults("limelight");
+
+for (LimelightHelpers.LimelightTarget_Fiducial tag : results.targets_Fiducials) {
+    System.out.println("Tag ID: " + (int) tag.fiducialID);
+    System.out.println("Family: " + tag.fiducialFamily);
+    System.out.println("TX: " + tag.tx + "  TY: " + tag.ty);
+
+    // 3D transforms
+    Pose3d robotInField = tag.getRobotPose_FieldSpace();
+    Pose3d camInTarget  = tag.getCameraPose_TargetSpace();
+    Pose3d targetInCam  = tag.getTargetPose_CameraSpace();
+    Pose3d targetInRobot = tag.getTargetPose_RobotSpace();
+}
+```
+
+Each `LimelightTarget_Fiducial` exposes:
+
+| Field / Method | Description |
+|---|---|
+| `fiducialID` | Tag ID (e.g., 1–22 for FRC 2024) |
+| `fiducialFamily` | Tag family string (e.g., `"36h11"`) |
+| `tx`, `ty` | Angular offset from crosshair in degrees |
+| `ta` | Target area as % of image |
+| `getCameraPose_TargetSpace()` | Camera pose relative to the tag |
+| `getRobotPose_FieldSpace()` | Robot pose in field coordinates |
+| `getTargetPose_CameraSpace()` | Tag pose relative to camera |
+| `getTargetPose_RobotSpace()` | Tag pose relative to robot |
+
+### Via NetworkTables (`getRawFiducials`)
+
+For lower latency (no JSON parse), read raw fiducial data directly from NetworkTables:
+
+```java
+LimelightHelpers.RawFiducial[] fiducials =
+    LimelightHelpers.getRawFiducials("limelight");
+
+for (LimelightHelpers.RawFiducial f : fiducials) {
+    System.out.printf("ID %d  ambiguity=%.3f  distToRobot=%.2fm%n",
+        f.id, f.ambiguity, f.distToRobot);
+}
+```
+
+Each `RawFiducial` contains:
+
+| Field | Description |
+|---|---|
+| `id` | AprilTag ID |
+| `txnc` | Horizontal offset from principal pixel in degrees |
+| `tync` | Vertical offset from principal pixel in degrees |
+| `ta` | Target area as % of image |
+| `distToCamera` | Distance from camera to tag in meters |
+| `distToRobot` | Distance from robot origin to tag in meters |
+| `ambiguity` | Pose ambiguity ratio (0 = unambiguous, >0.1 = unreliable) |
+
+## Filtering which tags are used
+
+To restrict localization to specific tag IDs (for example, only the tags near the scoring area):
+
+```java
+// Only use tags 1, 2, 3, and 4
+LimelightHelpers.SetFiducialIDFiltersOverride("limelight", new int[]{1, 2, 3, 4});
+```
+
+## 3D targeting offset
+
+To offset the target point used for 3D pose calculations:
+
+```java
+// Offset the target point 0.1m forward, 0m side, 0.2m up
+LimelightHelpers.setFiducial3DOffset("limelight", 0.1, 0.0, 0.2);
+```

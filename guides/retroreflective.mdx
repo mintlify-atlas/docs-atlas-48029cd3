@@ -1,0 +1,179 @@
+---
+title: "Retroreflective and color tracking"
+description: "Track retroreflective tape targets and color targets using tx, ty, and area measurements."
+---
+
+Retroreflective and color pipelines are Limelight's classic targeting modes. They identify high-contrast targets (retroreflective tape, colored objects) and return angular offsets and area for each detected contour.
+
+## Core targeting values
+
+These are the primary values available on every frame from a retroreflective or color pipeline:
+
+| Method | Returns | Description |
+|---|---|---|
+| `getTV(name)` | `boolean` | `true` if the camera sees a valid target |
+| `getTX(name)` | `double` | Horizontal offset from crosshair to target in degrees |
+| `getTY(name)` | `double` | Vertical offset from crosshair to target in degrees |
+| `getTXNC(name)` | `double` | Horizontal offset from the principal pixel in degrees |
+| `getTYNC(name)` | `double` | Vertical offset from the principal pixel in degrees |
+| `getTA(name)` | `double` | Target area as a percentage of the image (0–100%) |
+
+```java
+boolean hasTarget = LimelightHelpers.getTV("limelight");
+double tx         = LimelightHelpers.getTX("limelight");
+double ty         = LimelightHelpers.getTY("limelight");
+double txnc       = LimelightHelpers.getTXNC("limelight");
+double tync       = LimelightHelpers.getTYNC("limelight");
+double ta         = LimelightHelpers.getTA("limelight");
+```
+
+<Note>
+  `tx`/`ty` are measured from the adjustable crosshair you set in the Limelight web UI. `txnc`/`tync` are measured from the optical principal pixel — the most accurate 2D measurement when using a calibrated camera. Use `txnc`/`tync` when you need the best angular accuracy and don't rely on a specific crosshair position.
+</Note>
+
+Typical `tx` range is approximately −29.8° to +29.8° for most Limelight cameras, though this depends on the camera model and lens.
+
+## Additional target data
+
+### Target color
+
+Returns the average BGR (Blue-Green-Red) color of the pixels under the crosshair region:
+
+```java
+double[] color = LimelightHelpers.getTargetColor("limelight");
+double blue  = color[0];
+double green = color[1];
+double red   = color[2];
+```
+
+### Multiple contour results
+
+`getRawTargets()` returns up to 3 contour results directly from NetworkTables (no JSON parse):
+
+```java
+LimelightHelpers.RawTarget[] targets =
+    LimelightHelpers.getRawTargets("limelight");
+
+for (LimelightHelpers.RawTarget t : targets) {
+    System.out.printf("txnc=%.1f  tync=%.1f  ta=%.2f%n",
+        t.txnc, t.tync, t.ta);
+}
+```
+
+### Corner coordinates
+
+Returns the corner points of the detected contour(s) as a flat `[x0, y0, x1, y1, ...]` array. Requires **Send Contours** to be enabled in the Limelight Output tab.
+
+```java
+double[] corners = LimelightHelpers.getCornerCoordinates("limelight");
+// corners[0] = x of first corner, corners[1] = y of first corner, etc.
+```
+
+## Full results via JSON
+
+For 3D pose data and additional per-target fields, parse the JSON output:
+
+```java
+LimelightHelpers.LimelightResults results =
+    LimelightHelpers.getLatestResults("limelight");
+
+for (LimelightHelpers.LimelightTarget_Retro t : results.targets_Retro) {
+    System.out.printf("tx=%.1f  ty=%.1f  ta=%.2f  skew=%.1f%n",
+        t.tx, t.ty, t.ta, t.ts);
+
+    // 3D pose transforms
+    Pose3d robotInField  = t.getRobotPose_FieldSpace();
+    Pose3d targetInCam   = t.getTargetPose_CameraSpace();
+    Pose3d targetInRobot = t.getTargetPose_RobotSpace();
+    Pose3d camInTarget   = t.getCameraPose_TargetSpace();
+}
+```
+
+`LimelightTarget_Retro` fields:
+
+| Field / Method | Description |
+|---|---|
+| `ta` | Target area as % of image |
+| `tx` / `ty` | Angular offset from crosshair in degrees |
+| `tx_pixels` / `ty_pixels` | Offset in pixels |
+| `tx_nocrosshair` / `ty_nocrosshair` | Offset from principal pixel in degrees |
+| `ts` | Target skew in degrees |
+| `getCameraPose_TargetSpace()` | Camera pose relative to the target (3D) |
+| `getRobotPose_FieldSpace()` | Robot pose in field coordinates (3D) |
+| `getTargetPose_CameraSpace()` | Target pose relative to camera (3D) |
+| `getTargetPose_RobotSpace()` | Target pose relative to robot (3D) |
+
+## Aim-and-drive example
+
+A common use case is steering the robot toward a target using `getTX()` as a proportional error signal, and estimating distance using `getTY()` or `getTA()`.
+
+```java
+@Override
+public void teleopPeriodic() {
+    if (!LimelightHelpers.getTV("limelight")) {
+        // No target — stop or continue driving
+        drive.arcadeDrive(0, 0);
+        return;
+    }
+
+    double tx = LimelightHelpers.getTX("limelight");
+    double ty = LimelightHelpers.getTY("limelight");
+    double ta = LimelightHelpers.getTA("limelight");
+
+    // Proportional steering: tx drives the turn correction
+    double kP_steer = 0.03;
+    double steerCorrection = tx * kP_steer;
+
+    // Use ta as a proximity estimate — stop when target is "close enough"
+    boolean atTarget = ta > 10.0; // target fills >10% of image
+
+    if (!atTarget) {
+        double driveSpeed = 0.4;
+        drive.arcadeDrive(driveSpeed, steerCorrection);
+    } else {
+        drive.arcadeDrive(0, 0);
+    }
+
+    // ty can be used to estimate distance via the fixed-target formula:
+    // distance = (targetHeightMeters - cameraHeightMeters)
+    //            / tan(cameraMountAngleDegrees + ty * PI/180)
+}
+```
+
+## Barcode detection
+
+Limelight can decode QR codes, Data Matrix, and other 2D barcodes.
+
+### Raw barcode strings
+
+```java
+String[] barcodes = LimelightHelpers.getRawBarcodeData("limelight");
+for (String barcode : barcodes) {
+    System.out.println("Decoded: " + barcode);
+}
+```
+
+### Full barcode results via JSON
+
+```java
+LimelightHelpers.LimelightResults results =
+    LimelightHelpers.getLatestResults("limelight");
+
+for (LimelightHelpers.LimelightTarget_Barcode b : results.targets_Barcode) {
+    System.out.printf(
+        "Family: %s  Data: %s  tx=%.1f  ty=%.1f  ta=%.2f%n",
+        b.family, b.data, b.tx, b.ty, b.ta
+    );
+    // b.corners contains the corner coordinates of the barcode
+}
+```
+
+`LimelightTarget_Barcode` fields:
+
+| Field | Description |
+|---|---|
+| `family` | Barcode type (e.g., `"QR"`, `"DataMatrix"`) |
+| `data` | Decoded content as a string |
+| `tx` / `ty` | Angular offset in degrees |
+| `ta` | Target area as % of image |
+| `corners` | 2D array of corner coordinates `double[][]` |

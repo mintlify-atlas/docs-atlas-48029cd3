@@ -1,0 +1,167 @@
+---
+title: "Coordinate systems"
+description: "Understanding the reference frames used for pose data in LimelightLib."
+---
+
+LimelightLib provides pose data in multiple coordinate spaces. Understanding which to use is critical for correct robot localization.
+
+## WPILib field coordinate systems
+
+These methods return the robot's pose relative to a fixed field origin.
+
+### WPILib Blue Alliance (recommended)
+
+Origin at the blue alliance wall. This is the preferred frame because it does not flip when the alliance assignment changes between matches.
+
+```java
+// Returns a double[] array: [x, y, z, roll, pitch, yaw]
+double[] poseArray = LimelightHelpers.getBotPose_wpiBlue("limelight");
+
+// Returns a Pose2d directly
+Pose2d pose2d = LimelightHelpers.getBotPose2d_wpiBlue("limelight");
+
+// Returns a PoseEstimate with timestamp and fiducial metadata (MegaTag1)
+PoseEstimate estimate = LimelightHelpers.getBotPoseEstimate_wpiBlue("limelight");
+
+// Returns a PoseEstimate using MegaTag2 (requires SetRobotOrientation first)
+PoseEstimate estimateMT2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+```
+
+### WPILib Red Alliance
+
+Origin at the red alliance wall. Not recommended as your primary odometry frame.
+
+```java
+double[] poseArray = LimelightHelpers.getBotPose_wpiRed("limelight");
+Pose2d pose2d = LimelightHelpers.getBotPose2d_wpiRed("limelight");
+PoseEstimate estimate = LimelightHelpers.getBotPoseEstimate_wpiRed("limelight");
+PoseEstimate estimateMT2 = LimelightHelpers.getBotPoseEstimate_wpiRed_MegaTag2("limelight");
+```
+
+### Field-centric (legacy)
+
+Origin at the center of the field. Not WPILib-standard. Use the `_wpiBlue` or `_wpiRed` variants instead.
+
+```java
+// Deprecated — use getBotPose_wpiBlue instead
+double[] poseArray = LimelightHelpers.getBotPose("limelight");
+```
+
+## Relative coordinate spaces
+
+These methods return pose data relative to a moving reference — useful for target tracking and alignment, not for field localization.
+
+### Target space
+
+Pose expressed relative to the currently tracked target's coordinate frame.
+
+```java
+// Robot pose relative to the target
+Pose3d botInTarget = LimelightHelpers.getBotPose3d_TargetSpace("limelight");
+
+// Camera pose relative to the target
+Pose3d camInTarget = LimelightHelpers.getCameraPose3d_TargetSpace("limelight");
+```
+
+### Camera space
+
+Pose expressed relative to the camera's coordinate frame.
+
+```java
+// Target pose relative to the camera
+Pose3d targetInCam = LimelightHelpers.getTargetPose3d_CameraSpace("limelight");
+```
+
+### Robot space
+
+Pose expressed relative to the robot's coordinate frame.
+
+```java
+// Target pose relative to the robot
+Pose3d targetInRobot = LimelightHelpers.getTargetPose3d_RobotSpace("limelight");
+
+// Camera pose relative to the robot (reflects your camera mount offset)
+Pose3d camInRobot = LimelightHelpers.getCameraPose3d_RobotSpace("limelight");
+```
+
+## Pose array format
+
+All raw pose data from NetworkTables is returned as a 6-element `double[]` array:
+
+```
+[x, y, z, roll, pitch, yaw]
+```
+
+- `x`, `y`, `z` — translation in meters
+- `roll`, `pitch`, `yaw` — rotation angles in degrees
+
+Use `toPose3D` and `toPose2D` to convert these arrays to WPILib geometry objects:
+
+```java
+/**
+ * Converts [x, y, z, roll, pitch, yaw] to a Pose3d.
+ * Angles are converted from degrees to radians internally.
+ */
+public static Pose3d toPose3D(double[] inData) {
+    if (inData.length < 6) {
+        return new Pose3d();
+    }
+    return new Pose3d(
+        new Translation3d(inData[0], inData[1], inData[2]),
+        new Rotation3d(
+            Units.degreesToRadians(inData[3]),
+            Units.degreesToRadians(inData[4]),
+            Units.degreesToRadians(inData[5])
+        )
+    );
+}
+
+/**
+ * Converts [x, y, z, roll, pitch, yaw] to a Pose2d.
+ * Uses only x, y, and yaw. z, roll, and pitch are ignored.
+ */
+public static Pose2d toPose2D(double[] inData) {
+    if (inData.length < 6) {
+        return new Pose2d();
+    }
+    Translation2d tran2d = new Translation2d(inData[0], inData[1]);
+    Rotation2d r2d = new Rotation2d(Units.degreesToRadians(inData[5]));
+    return new Pose2d(tran2d, r2d);
+}
+```
+
+Use `Pose2d` when integrating with WPILib's `SwerveDrivePoseEstimator` or `DifferentialDrivePoseEstimator` via `addVisionMeasurement`. Use `Pose3d` when you need full 3D pose information, such as for robots that pitch or roll significantly.
+
+## Extended botpose arrays
+
+The botpose arrays (`botpose_wpiblue`, `botpose_orb_wpiblue`, etc.) contain additional metadata beyond the 6 pose values. The `getBotPoseEstimate_*` methods parse this automatically into a `PoseEstimate` object, but you can also read the raw array directly:
+
+| Index | Field | Description |
+|---|---|---|
+| 0–5 | `x, y, z, roll, pitch, yaw` | Robot pose |
+| 6 | `latency` | Total pipeline + capture latency in ms |
+| 7 | `tagCount` | Number of tags used in the pose solve |
+| 8 | `tagSpan` | Distance between the outermost tags used, in meters |
+| 9 | `avgTagDist` | Average distance to all tags used, in meters |
+| 10 | `avgTagArea` | Average tag area as a percentage of the image |
+| 11+ | Per-fiducial data | 7 values per tag: `id, txnc, tync, ta, distToCamera, distToRobot, ambiguity` |
+
+The `getBotPoseEstimate` family of methods reads this layout directly:
+
+```java
+PoseEstimate estimate = LimelightHelpers.getBotPoseEstimate_wpiBlue("limelight");
+
+double latencyMs   = estimate.latency;
+int tagCount       = estimate.tagCount;
+double tagSpanM    = estimate.tagSpan;
+double avgDistM    = estimate.avgTagDist;
+double avgAreaPct  = estimate.avgTagArea;
+
+for (RawFiducial tag : estimate.rawFiducials) {
+    System.out.println("Tag ID: " + tag.id);
+    System.out.println("  Ambiguity: " + tag.ambiguity);
+    System.out.println("  Dist to camera: " + tag.distToCamera + " m");
+}
+```
+
+The adjusted timestamp for `addVisionMeasurement` is already computed for you in `estimate.timestampSeconds` — it subtracts latency from the server-side NetworkTables timestamp.

@@ -1,0 +1,341 @@
+---
+title: "LimelightResults"
+description: "The full JSON results object returned by getLatestResults(), containing all pipeline target data."
+---
+
+`LimelightResults` is the deserialized form of the Limelight's full JSON output. It is returned by `LimelightHelpers.getLatestResults(limelightName)`, which fetches the `json` NetworkTables entry and parses it with Jackson.
+
+```java
+LimelightResults results = LimelightHelpers.getLatestResults("limelight");
+```
+
+<Tip>
+  For high-frequency robot loops, prefer the direct NetworkTables methods — `getRawFiducials`, `getBotPoseEstimate_wpiBlue`, `getTX`, etc. — over `getLatestResults()`. JSON parsing adds measurable latency (`latency_jsonParse` records the cost per call) and allocates garbage on every invocation. Reserve `getLatestResults()` for tasks where you need the full result set: iterating all detector outputs, reading barcode data, or logging diagnostics.
+</Tip>
+
+## Top-level fields
+
+<ResponseField name="error" type="String">
+  Non-empty if JSON parsing failed or the NT entry was empty. Always check this field before using any other data. Example values: `"lljson error: empty json"`, `"lljson error: <Jackson message>"`.
+</ResponseField>
+
+<ResponseField name="pipelineID" type="double">
+  Active pipeline index at the time the frame was processed. Maps to JSON key `pID`.
+</ResponseField>
+
+<ResponseField name="latency_pipeline" type="double">
+  Pipeline processing latency in milliseconds. Maps to JSON key `tl`.
+</ResponseField>
+
+<ResponseField name="latency_capture" type="double">
+  Image capture latency in milliseconds. Maps to JSON key `cl`.
+</ResponseField>
+
+<ResponseField name="latency_jsonParse" type="double">
+  Time to parse the JSON string in the library, in milliseconds. Set by `getLatestResults()` after deserialization — not part of the Limelight JSON payload.
+</ResponseField>
+
+<ResponseField name="timestamp_LIMELIGHT_publish" type="double">
+  Limelight-side publish timestamp. Maps to JSON key `ts`.
+</ResponseField>
+
+<ResponseField name="timestamp_RIOFPGA_capture" type="double">
+  RoboRIO FPGA timestamp at the moment NetworkTables captured the entry. Maps to JSON key `ts_rio`.
+</ResponseField>
+
+<ResponseField name="timestamp_nt" type="long">
+  NetworkTables timestamp in microseconds. Maps to JSON key `ts_nt`.
+</ResponseField>
+
+<ResponseField name="timestamp_sys" type="long">
+  System timestamp. Maps to JSON key `ts_sys`.
+</ResponseField>
+
+<ResponseField name="timestamp_us" type="long">
+  Microsecond timestamp. Maps to JSON key `ts_us`.
+</ResponseField>
+
+<ResponseField name="valid" type="boolean">
+  Whether the pipeline produced valid results for this frame. Maps to JSON key `v` (encoded as a number: 0 or 1).
+</ResponseField>
+
+<ResponseField name="pipelineType" type="String">
+  Active pipeline type string, e.g. `"retro"`, `"apriltag"`, `"neural_detector"`. Maps to JSON key `pTYPE`.
+</ResponseField>
+
+## Primary target values
+
+<ResponseField name="tx" type="double">
+  Horizontal offset from the crosshair to the primary target in degrees.
+</ResponseField>
+
+<ResponseField name="ty" type="double">
+  Vertical offset from the crosshair to the primary target in degrees.
+</ResponseField>
+
+<ResponseField name="tx_nocrosshair" type="double">
+  Horizontal offset from the camera's principal point (no crosshair correction) in degrees. Maps to JSON key `txnc`.
+</ResponseField>
+
+<ResponseField name="ty_nocrosshair" type="double">
+  Vertical offset from the camera's principal point in degrees. Maps to JSON key `tync`.
+</ResponseField>
+
+<ResponseField name="ta" type="double">
+  Primary target area as a percentage of the image (0–100).
+</ResponseField>
+
+## Robot pose arrays
+
+Each pose array has 6 elements: `[x, y, z, roll, pitch, yaw]`. Translation is in meters; angles are in degrees. Use the WPILib Blue variants for new code.
+
+<ResponseField name="botpose" type="double[6]">
+  Robot pose in the field-origin coordinate system.
+</ResponseField>
+
+<ResponseField name="botpose_wpiblue" type="double[6]">
+  Robot pose in the WPILib Blue alliance coordinate system (origin at the blue alliance wall). Preferred for pose estimator integration.
+</ResponseField>
+
+<ResponseField name="botpose_wpired" type="double[6]">
+  Robot pose in the WPILib Red alliance coordinate system.
+</ResponseField>
+
+<ResponseField name="botpose_tagcount" type="double">
+  Number of AprilTags used to compute the MegaTag1 pose.
+</ResponseField>
+
+<ResponseField name="botpose_span" type="double">
+  Distance in meters between the two outermost contributing tags.
+</ResponseField>
+
+<ResponseField name="botpose_avgdist" type="double">
+  Average distance in meters from the camera to contributing tags.
+</ResponseField>
+
+<ResponseField name="botpose_avgarea" type="double">
+  Average tag area (% of image) across all contributing tags.
+</ResponseField>
+
+## MegaTag2 pose arrays
+
+<ResponseField name="botpose_orb" type="double[6]">
+  MegaTag2 robot pose in the field-origin coordinate system.
+</ResponseField>
+
+<ResponseField name="botpose_orb_wpiblue" type="double[6]">
+  MegaTag2 robot pose in the WPILib Blue alliance coordinate system.
+</ResponseField>
+
+<ResponseField name="botpose_orb_wpired" type="double[6]">
+  MegaTag2 robot pose in the WPILib Red alliance coordinate system.
+</ResponseField>
+
+## Pose helper methods
+
+`LimelightResults` exposes convenience methods to convert the raw arrays to WPILib geometry objects:
+
+| Method | Returns | Source array |
+|---|---|---|
+| `getBotPose2d()` | `Pose2d` | `botpose` |
+| `getBotPose2d_wpiBlue()` | `Pose2d` | `botpose_wpiblue` |
+| `getBotPose2d_wpiRed()` | `Pose2d` | `botpose_wpired` |
+| `getBotPose3d()` | `Pose3d` | `botpose` |
+| `getBotPose3d_wpiBlue()` | `Pose3d` | `botpose_wpiblue` |
+| `getBotPose3d_wpiRed()` | `Pose3d` | `botpose_wpired` |
+
+## Target arrays
+
+<ResponseField name="targets_Retro" type="LimelightTarget_Retro[]">
+  Color/retroreflective pipeline targets. Each entry includes `ta`, `tx`, `ty`, `tx_pixels`, `ty_pixels`, `tx_nocrosshair`, `ty_nocrosshair`, and pose methods (`getCameraPose_TargetSpace`, `getRobotPose_FieldSpace`, etc.).
+</ResponseField>
+
+<ResponseField name="targets_Fiducials" type="LimelightTarget_Fiducial[]">
+  AprilTag pipeline targets. See [LimelightTarget_Fiducial](#limelighttarget_fiducial-fields) below.
+</ResponseField>
+
+<ResponseField name="targets_Classifier" type="LimelightTarget_Classifier[]">
+  Neural classifier pipeline results. Each entry includes `className` (String), `classID` (double), `confidence` (double), `zone` (double), `tx`, `ty`, `tx_pixels`, `ty_pixels`.
+</ResponseField>
+
+<ResponseField name="targets_Detector" type="LimelightTarget_Detector[]">
+  Neural detector pipeline results. Each entry includes `className` (String), `classID` (double), `confidence` (double), `ta`, `tx`, `ty`, `tx_pixels`, `ty_pixels`, `tx_nocrosshair`, `ty_nocrosshair`.
+</ResponseField>
+
+<ResponseField name="targets_Barcode" type="LimelightTarget_Barcode[]">
+  Barcode pipeline results. See [LimelightTarget_Barcode](#limelighttarget_barcode-fields) below.
+</ResponseField>
+
+## Hardware and diagnostic fields
+
+<ResponseField name="hardware" type="HardwareReport">
+  Limelight hardware statistics for the current frame.
+
+  <Expandable title="HardwareReport fields">
+    <ResponseField name="cameraId" type="String">
+      Camera model identifier string. Maps to JSON key `cid`.
+    </ResponseField>
+    <ResponseField name="cpuUsage" type="double">
+      CPU utilization percentage (0–100). Maps to JSON key `cpu`.
+    </ResponseField>
+    <ResponseField name="ramUsage" type="double">
+      RAM utilization percentage (0–100). Maps to JSON key `ram`.
+    </ResponseField>
+    <ResponseField name="temperature" type="double">
+      SoC temperature in degrees Celsius. Maps to JSON key `temp`.
+    </ResponseField>
+    <ResponseField name="diskFree" type="double">
+      Free disk space in megabytes. Maps to JSON key `dfree`.
+    </ResponseField>
+    <ResponseField name="diskTotal" type="double">
+      Total disk capacity in megabytes. Maps to JSON key `dtot`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="imuResults" type="IMUResults">
+  IMU data from the JSON payload. After parsing, `getLatestResults()` calls `imuResults.parseDataArray()` internally, which populates `robotYaw`, `roll`, `pitch`, `rawYaw`, `gyroX/Y/Z`, and `accelX/Y/Z` from the raw `data` array. For direct NT access without JSON, see [`getIMUData`](/api/raw-types#imudata).
+</ResponseField>
+
+<ResponseField name="rewindStats" type="RewindStats">
+  Capture rewind buffer statistics for the current frame.
+
+  <Expandable title="RewindStats fields">
+    <ResponseField name="bufferUsage" type="double">
+      Rewind buffer usage as a fraction (0–1).
+    </ResponseField>
+    <ResponseField name="enabled" type="int">
+      `1` if rewind recording is enabled, `0` if paused.
+    </ResponseField>
+    <ResponseField name="flushing" type="int">
+      `1` if the buffer is actively flushing to disk.
+    </ResponseField>
+    <ResponseField name="frameCount" type="int">
+      Number of frames currently stored in the rewind buffer.
+    </ResponseField>
+    <ResponseField name="latencyPenalty" type="int">
+      Latency penalty in milliseconds added by the rewind buffer. Maps to JSON key `latpen`.
+    </ResponseField>
+    <ResponseField name="storedSeconds" type="double">
+      Total duration in seconds currently stored in the rewind buffer.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pythonOutput" type="double[]">
+  Output values written by a Python snap script running on the Limelight. Maps to JSON key `PythonOut`.
+</ResponseField>
+
+## LimelightTarget_Fiducial fields
+
+<ResponseField name="fiducialID" type="double">
+  AprilTag ID. Maps to JSON key `fID`.
+</ResponseField>
+
+<ResponseField name="fiducialFamily" type="String">
+  Tag family string, e.g. `"tag36h11"`. Maps to JSON key `fam`.
+</ResponseField>
+
+<ResponseField name="ta" type="double">
+  Tag area as a percentage of the image.
+</ResponseField>
+
+<ResponseField name="tx" type="double">
+  Horizontal offset from the crosshair to the tag center in degrees.
+</ResponseField>
+
+<ResponseField name="ty" type="double">
+  Vertical offset from the crosshair to the tag center in degrees.
+</ResponseField>
+
+<ResponseField name="tx_pixels" type="double">
+  Horizontal position of the tag center in pixels. Maps to JSON key `txp`.
+</ResponseField>
+
+<ResponseField name="ty_pixels" type="double">
+  Vertical position of the tag center in pixels. Maps to JSON key `typ`.
+</ResponseField>
+
+<ResponseField name="tx_nocrosshair" type="double">
+  Horizontal offset from the camera's principal point in degrees. Maps to JSON key `tx_nocross`.
+</ResponseField>
+
+<ResponseField name="ty_nocrosshair" type="double">
+  Vertical offset from the camera's principal point in degrees. Maps to JSON key `ty_nocross`.
+</ResponseField>
+
+`LimelightTarget_Fiducial` also exposes the same set of pose methods as `LimelightTarget_Retro`:
+`getCameraPose_TargetSpace()`, `getRobotPose_FieldSpace()`, `getRobotPose_TargetSpace()`,
+`getTargetPose_CameraSpace()`, `getTargetPose_RobotSpace()`, and their `2D` counterparts.
+All return `Pose3d` / `Pose2d` respectively.
+
+## LimelightTarget_Barcode fields
+
+<ResponseField name="family" type="String">
+  Barcode symbology, e.g. `"QR"`, `"DataMatrix"`, `"Code128"`. Maps to JSON key `fam`.
+</ResponseField>
+
+<ResponseField name="data" type="String">
+  Decoded text content of the barcode. Maps to JSON key `data`.
+</ResponseField>
+
+<ResponseField name="tx" type="double">
+  Horizontal offset from the crosshair to the barcode center in degrees.
+</ResponseField>
+
+<ResponseField name="ty" type="double">
+  Vertical offset from the crosshair to the barcode center in degrees.
+</ResponseField>
+
+<ResponseField name="tx_pixels" type="double">
+  Horizontal pixel position of the barcode center. Maps to JSON key `txp`.
+</ResponseField>
+
+<ResponseField name="ty_pixels" type="double">
+  Vertical pixel position of the barcode center. Maps to JSON key `typ`.
+</ResponseField>
+
+<ResponseField name="ta" type="double">
+  Barcode area as a percentage of the image.
+</ResponseField>
+
+<ResponseField name="corners" type="double[][]">
+  Corner point coordinates of the barcode bounding polygon. Maps to JSON key `pts`. Each element is a 2-element array `[x, y]` in pixel coordinates.
+</ResponseField>
+
+## Code example
+
+```java
+LimelightResults results = LimelightHelpers.getLatestResults("limelight");
+
+// Guard against parse failures.
+if (results.error != null && !results.error.isEmpty()) {
+    DriverStation.reportWarning("Limelight JSON error: " + results.error, false);
+    return;
+}
+
+if (!results.valid) {
+    return;
+}
+
+// Iterate over all detected fiducial targets.
+for (LimelightHelpers.LimelightTarget_Fiducial tag : results.targets_Fiducials) {
+    int id = (int) tag.fiducialID;
+    double dist = tag.getCameraPose_TargetSpace().getTranslation().getNorm();
+    System.out.printf("Tag %d  tx=%.1f°  dist=%.2f m%n", id, tag.tx, dist);
+}
+
+// Read barcode data.
+for (LimelightHelpers.LimelightTarget_Barcode barcode : results.targets_Barcode) {
+    System.out.printf("Barcode [%s]: %s%n", barcode.family, barcode.data);
+}
+
+// Check hardware temperature.
+if (results.hardware != null && results.hardware.temperature > 70.0) {
+    DriverStation.reportWarning("Limelight temperature high: "
+        + results.hardware.temperature + "°C", false);
+}
+
+// Log JSON parse cost.
+SmartDashboard.putNumber("LL/jsonParseMs", results.latency_jsonParse);
+```

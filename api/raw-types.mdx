@@ -1,0 +1,287 @@
+---
+title: "Raw data types"
+description: "RawFiducial, RawDetection, RawTarget, and IMUData — low-latency data types read directly from NetworkTables."
+---
+
+The raw data types bypass JSON parsing entirely. Each method reads a flat `double[]` array from a dedicated NetworkTables entry, splits it into fixed-width records, and returns a typed array. This makes them suitable for use in tight robot loops where latency and garbage collection matter.
+
+<Tip>
+  `getLatestResults()` fetches the entire JSON payload and deserializes it with Jackson on every call. For a single Limelight running at 100 fps, this can add 0.5–2 ms of processing time per loop and allocates heap objects every frame. The raw NT methods (`getRawFiducials`, `getRawDetections`, `getRawTargets`, `getIMUData`) avoid both costs: they read a single primitive array entry and construct a small fixed set of value objects with no JSON involved. Prefer them in performance-sensitive periodic code.
+</Tip>
+
+---
+
+## RawFiducial
+
+Returned by `LimelightHelpers.getRawFiducials(limelightName)`. Reads the `rawfiducials` NT entry, which stores 7 `double` values per detected AprilTag in a flat array.
+
+```java
+RawFiducial[] fiducials = LimelightHelpers.getRawFiducials("limelight");
+```
+
+If the array length is not a multiple of 7, an empty array is returned.
+
+### Fields
+
+<ResponseField name="id" type="int" required>
+  AprilTag ID. Cast from the first element of each 7-value block.
+</ResponseField>
+
+<ResponseField name="txnc" type="double" required>
+  Horizontal offset from the camera's principal point to the tag center in degrees. Positive is right.
+</ResponseField>
+
+<ResponseField name="tync" type="double" required>
+  Vertical offset from the camera's principal point to the tag center in degrees. Positive is up.
+</ResponseField>
+
+<ResponseField name="ta" type="double" required>
+  Tag area as a percentage of the image (0–100).
+</ResponseField>
+
+<ResponseField name="distToCamera" type="double" required>
+  3D distance from the camera lens to the tag center in meters.
+</ResponseField>
+
+<ResponseField name="distToRobot" type="double" required>
+  3D distance from the robot origin to the tag center in meters.
+</ResponseField>
+
+<ResponseField name="ambiguity" type="double" required>
+  Pose solve ambiguity ratio. Values near 0 indicate an unambiguous solve; values approaching 1 indicate two near-equal solutions. Reject estimates where this exceeds ~0.1 when only one tag is visible.
+</ResponseField>
+
+### Array layout
+
+Each tag occupies 7 consecutive elements:
+
+```
+[ id, txnc, tync, ta, distToCamera, distToRobot, ambiguity, <next tag...> ]
+```
+
+### Code example
+
+```java
+RawFiducial[] fiducials = LimelightHelpers.getRawFiducials("limelight");
+
+for (RawFiducial f : fiducials) {
+    SmartDashboard.putNumber("LL/tag" + f.id + "/dist", f.distToRobot);
+    if (f.ambiguity > 0.1) {
+        System.out.println("Tag " + f.id + " has high ambiguity: " + f.ambiguity);
+    }
+}
+```
+
+---
+
+## RawDetection
+
+Returned by `LimelightHelpers.getRawDetections(limelightName)`. Reads the `rawdetections` NT entry, which stores 12 `double` values per neural detector result in a flat array.
+
+```java
+RawDetection[] detections = LimelightHelpers.getRawDetections("limelight");
+```
+
+If the array length is not a multiple of 12, an empty array is returned.
+
+### Fields
+
+<ResponseField name="classId" type="int" required>
+  Neural network class index. Cast from the first element of each 12-value block.
+</ResponseField>
+
+<ResponseField name="txnc" type="double" required>
+  Horizontal offset from the camera's principal point to the detection center in degrees.
+</ResponseField>
+
+<ResponseField name="tync" type="double" required>
+  Vertical offset from the camera's principal point to the detection center in degrees.
+</ResponseField>
+
+<ResponseField name="ta" type="double" required>
+  Detection bounding-box area as a percentage of the image (0–100).
+</ResponseField>
+
+<ResponseField name="corner0_X" type="double" required>
+  X coordinate of bounding box corner 0 in normalized image space.
+</ResponseField>
+
+<ResponseField name="corner0_Y" type="double" required>
+  Y coordinate of bounding box corner 0 in normalized image space.
+</ResponseField>
+
+<ResponseField name="corner1_X" type="double" required>
+  X coordinate of bounding box corner 1.
+</ResponseField>
+
+<ResponseField name="corner1_Y" type="double" required>
+  Y coordinate of bounding box corner 1.
+</ResponseField>
+
+<ResponseField name="corner2_X" type="double" required>
+  X coordinate of bounding box corner 2.
+</ResponseField>
+
+<ResponseField name="corner2_Y" type="double" required>
+  Y coordinate of bounding box corner 2.
+</ResponseField>
+
+<ResponseField name="corner3_X" type="double" required>
+  X coordinate of bounding box corner 3.
+</ResponseField>
+
+<ResponseField name="corner3_Y" type="double" required>
+  Y coordinate of bounding box corner 3.
+</ResponseField>
+
+### Array layout
+
+Each detection occupies 12 consecutive elements:
+
+```
+[ classId, txnc, tync, ta,
+  corner0_X, corner0_Y,
+  corner1_X, corner1_Y,
+  corner2_X, corner2_Y,
+  corner3_X, corner3_Y,
+  <next detection...> ]
+```
+
+### Code example
+
+```java
+RawDetection[] detections = LimelightHelpers.getRawDetections("limelight");
+
+for (RawDetection d : detections) {
+    System.out.printf(
+        "Class %d  center=(%.1f°, %.1f°)  area=%.1f%%%n",
+        d.classId, d.txnc, d.tync, d.ta
+    );
+}
+```
+
+---
+
+## RawTarget
+
+Returned by `LimelightHelpers.getRawTargets(limelightName)`. Reads the `rawtargets` NT entry, which stores 3 `double` values per ungrouped contour result. Returns up to 3 contours.
+
+```java
+RawTarget[] targets = LimelightHelpers.getRawTargets("limelight");
+```
+
+If the array length is not a multiple of 3, an empty array is returned.
+
+### Fields
+
+<ResponseField name="txnc" type="double" required>
+  Horizontal offset from the camera's principal point to the contour center, in degrees.
+</ResponseField>
+
+<ResponseField name="tync" type="double" required>
+  Vertical offset from the camera's principal point to the contour center, in degrees.
+</ResponseField>
+
+<ResponseField name="ta" type="double" required>
+  Contour area as a percentage of the image (0–100).
+</ResponseField>
+
+### Array layout
+
+Each contour occupies 3 consecutive elements:
+
+```
+[ txnc, tync, ta, <next contour...> ]
+```
+
+### Code example
+
+```java
+RawTarget[] targets = LimelightHelpers.getRawTargets("limelight");
+
+for (int i = 0; i < targets.length; i++) {
+    RawTarget t = targets[i];
+    System.out.printf(
+        "Contour %d  tx=%.2f  ty=%.2f  area=%.2f%%%n",
+        i, t.txnc, t.tync, t.ta
+    );
+}
+```
+
+---
+
+## IMUData
+
+Returned by `LimelightHelpers.getIMUData(limelightName)`. Reads the `imu` NT entry (a 10-element `double[]`) and populates an `IMUData` object. Returns an all-zeros object if the entry is absent or shorter than 10 elements.
+
+```java
+IMUData imu = LimelightHelpers.getIMUData("limelight");
+```
+
+### Fields
+
+<ResponseField name="robotYaw" type="double" required>
+  Robot yaw fused by the Limelight's localization algorithm, in degrees. This is the yaw value Limelight uses internally, which may differ from `Yaw` depending on IMU mode. Array index 0.
+</ResponseField>
+
+<ResponseField name="Roll" type="double" required>
+  IMU roll angle in degrees. Array index 1.
+</ResponseField>
+
+<ResponseField name="Pitch" type="double" required>
+  IMU pitch angle in degrees. Array index 2.
+</ResponseField>
+
+<ResponseField name="Yaw" type="double" required>
+  Raw IMU yaw angle in degrees. Array index 3.
+</ResponseField>
+
+<ResponseField name="gyroX" type="double" required>
+  Gyroscope X-axis angular rate in degrees per second. Array index 4.
+</ResponseField>
+
+<ResponseField name="gyroY" type="double" required>
+  Gyroscope Y-axis angular rate in degrees per second. Array index 5.
+</ResponseField>
+
+<ResponseField name="gyroZ" type="double" required>
+  Gyroscope Z-axis angular rate in degrees per second. Array index 6.
+</ResponseField>
+
+<ResponseField name="accelX" type="double" required>
+  Accelerometer X-axis reading in g. Array index 7.
+</ResponseField>
+
+<ResponseField name="accelY" type="double" required>
+  Accelerometer Y-axis reading in g. Array index 8.
+</ResponseField>
+
+<ResponseField name="accelZ" type="double" required>
+  Accelerometer Z-axis reading in g. Array index 9.
+</ResponseField>
+
+### Array layout
+
+```
+index: [ 0,         1,    2,     3,   4,     5,     6,     7,     8,     9     ]
+field: [ robotYaw,  Roll, Pitch, Yaw, gyroX, gyroY, gyroZ, accelX, accelY, accelZ ]
+```
+
+### Code example
+
+```java
+LimelightHelpers.IMUData imu = LimelightHelpers.getIMUData("limelight");
+
+SmartDashboard.putNumber("LL/IMU/robotYaw", imu.robotYaw);
+SmartDashboard.putNumber("LL/IMU/pitch",    imu.Pitch);
+SmartDashboard.putNumber("LL/IMU/roll",     imu.Roll);
+SmartDashboard.putNumber("LL/IMU/gyroZ",    imu.gyroZ);
+
+// Use robotYaw to feed MegaTag2 when the primary gyro is unavailable:
+LimelightHelpers.SetRobotOrientation(
+    "limelight",
+    imu.robotYaw, 0,
+    0, 0,
+    0, 0
+);
+```

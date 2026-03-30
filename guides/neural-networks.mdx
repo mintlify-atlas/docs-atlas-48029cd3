@@ -1,0 +1,159 @@
+---
+title: "Neural network pipelines"
+description: "Use Limelight's neural classifier and detector pipelines to identify and locate game pieces."
+---
+
+Limelight supports two neural network pipeline types:
+
+- **Classifier** — classifies the entire camera frame into a single category (e.g., "cargo present" vs. "no cargo").
+- **Detector** — detects and locates one or more objects within the frame, returning bounding boxes and class labels.
+
+<Tabs>
+  <Tab title="Classifier pipeline">
+    ## Classifier pipeline
+
+    The classifier pipeline analyzes the full frame and outputs the most likely class. Use it when you need a simple yes/no or category answer about what the camera is seeing.
+
+    ### Quick reads (NetworkTables)
+
+    ```java
+    // Class name as a string (e.g., "note", "empty")
+    String className = LimelightHelpers.getClassifierClass("limelight");
+
+    // Class index (integer ID from the T2D array)
+    int classIndex = LimelightHelpers.getClassifierClassIndex("limelight");
+    ```
+
+    `getClassifierClass()` reads from the `tcclass` NetworkTables key. `getClassifierClassIndex()` reads index 11 from the T2D array.
+
+    ### Full results via JSON
+
+    ```java
+    LimelightHelpers.LimelightResults results =
+        LimelightHelpers.getLatestResults("limelight");
+
+    for (LimelightHelpers.LimelightTarget_Classifier c : results.targets_Classifier) {
+        System.out.printf(
+            "Class: %s (ID %d)  confidence=%.2f  zone=%.0f  tx=%.1f  ty=%.1f%n",
+            c.className, (int) c.classID, c.confidence, c.zone, c.tx, c.ty
+        );
+    }
+    ```
+
+    Each `LimelightTarget_Classifier` contains:
+
+    | Field | Type | Description |
+    |---|---|---|
+    | `className` | `String` | Human-readable class name |
+    | `classID` | `double` | Numeric class ID |
+    | `confidence` | `double` | Classification confidence (0–1) |
+    | `zone` | `double` | Zone index used for classification |
+    | `tx` | `double` | Horizontal offset in degrees |
+    | `ty` | `double` | Vertical offset in degrees |
+    | `tx_pixels` | `double` | Horizontal offset in pixels |
+    | `ty_pixels` | `double` | Vertical offset in pixels |
+  </Tab>
+  <Tab title="Detector pipeline">
+    ## Detector pipeline
+
+    The detector pipeline locates individual objects in the frame, returning bounding boxes, class labels, and angular offsets for each detected object.
+
+    ### Quick reads (NetworkTables)
+
+    ```java
+    // Primary detected object's class name
+    String detClass = LimelightHelpers.getDetectorClass("limelight");
+
+    // Primary detected object's class index
+    int detIndex = LimelightHelpers.getDetectorClassIndex("limelight");
+    ```
+
+    ### Raw detections (fastest — no JSON parse)
+
+    <Tip>
+      Prefer `getRawDetections()` over `getLatestResults()` for time-sensitive detection loops. Raw detections are read directly from NetworkTables and avoid the overhead of JSON serialization and parsing on the Limelight and deserialization on the RoboRIO.
+    </Tip>
+
+    ```java
+    LimelightHelpers.RawDetection[] detections =
+        LimelightHelpers.getRawDetections("limelight");
+
+    for (LimelightHelpers.RawDetection d : detections) {
+        System.out.printf(
+            "Class %d  txnc=%.1f  tync=%.1f  ta=%.2f%n",
+            d.classId, d.txnc, d.tync, d.ta
+        );
+
+        // Bounding box corners (in pixels)
+        // corner0 = top-left, corner1 = top-right
+        // corner2 = bottom-right, corner3 = bottom-left
+        System.out.printf(
+            "  Corners: (%.0f,%.0f) (%.0f,%.0f) (%.0f,%.0f) (%.0f,%.0f)%n",
+            d.corner0_X, d.corner0_Y,
+            d.corner1_X, d.corner1_Y,
+            d.corner2_X, d.corner2_Y,
+            d.corner3_X, d.corner3_Y
+        );
+    }
+    ```
+
+    Each `RawDetection` contains:
+
+    | Field | Type | Description |
+    |---|---|---|
+    | `classId` | `int` | Numeric class ID |
+    | `txnc` | `double` | Horizontal offset from principal pixel in degrees |
+    | `tync` | `double` | Vertical offset from principal pixel in degrees |
+    | `ta` | `double` | Target area as % of image |
+    | `corner0_X` / `corner0_Y` | `double` | Top-left corner coordinates |
+    | `corner1_X` / `corner1_Y` | `double` | Top-right corner coordinates |
+    | `corner2_X` / `corner2_Y` | `double` | Bottom-right corner coordinates |
+    | `corner3_X` / `corner3_Y` | `double` | Bottom-left corner coordinates |
+
+    ### Full results via JSON
+
+    ```java
+    LimelightHelpers.LimelightResults results =
+        LimelightHelpers.getLatestResults("limelight");
+
+    for (LimelightHelpers.LimelightTarget_Detector d : results.targets_Detector) {
+        System.out.printf(
+            "Class: %s (ID %d)  conf=%.2f  ta=%.2f  tx=%.1f  ty=%.1f%n",
+            d.className, (int) d.classID, d.confidence,
+            d.ta, d.tx, d.ty
+        );
+    }
+    ```
+
+    Each `LimelightTarget_Detector` contains:
+
+    | Field | Description |
+    |---|---|
+    | `className` | Human-readable class name |
+    | `classID` | Numeric class ID |
+    | `confidence` | Detection confidence (0–1) |
+    | `ta` | Target area as % of image |
+    | `tx` / `ty` | Angular offset from crosshair in degrees |
+    | `tx_pixels` / `ty_pixels` | Offset in pixels |
+    | `tx_nocrosshair` / `ty_nocrosshair` | Offset from principal pixel in degrees |
+  </Tab>
+</Tabs>
+
+## Python scripting
+
+You can run custom Python scripts on the Limelight and exchange data arrays over NetworkTables. This lets you implement advanced logic or custom processing without modifying robot code.
+
+```java
+// Send data to the Python script running on the Limelight
+// Up to 32 doubles in the outgoing array
+double[] outgoing = { 1.0, 2.0, 3.0 };
+LimelightHelpers.setPythonScriptData("limelight", outgoing);
+
+// Read output from the Python script
+double[] incoming = LimelightHelpers.getPythonScriptData("limelight");
+if (incoming.length > 0) {
+    System.out.println("Python output[0]: " + incoming[0]);
+}
+```
+
+Data flows as `double[]` arrays over the `llrobot` (outgoing) and `llpython` (incoming) NetworkTables keys. The Python script reads from `llrobot` and writes to `llpython`.

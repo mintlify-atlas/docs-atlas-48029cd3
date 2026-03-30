@@ -1,0 +1,57 @@
+---
+title: "Introduction"
+description: "What LimelightLib is, what it supports, and how to get started quickly."
+---
+
+LimelightLib is a single-file Java library (`LimelightHelpers.java`) for FRC robots using WPILib. It exposes every Limelight camera feature through static methods — no build system plugins, no additional dependencies, and no extra setup beyond dropping the file into your project.
+
+Communication happens entirely over NetworkTables. As long as your robot and Limelight are on the same network, the library works without any configuration.
+
+<Note>
+  LimelightLib v1.14 requires **LLOS 2026.0 or later** on your Limelight camera. Check your firmware version in the Limelight web interface before use.
+</Note>
+
+## Supported pipeline types
+
+LimelightLib supports all Limelight pipeline modes:
+
+- **AprilTag / Fiducial** — multi-tag and single-tag 3D pose estimation
+- **Retroreflective** — track reflective tape targets with tx/ty angular offsets
+- **Color** — color-threshold target tracking
+- **Neural classifier** — identify game pieces or field elements by class
+- **Neural detector** — locate and bound multiple objects simultaneously
+- **Barcode** — decode QR codes, Data Matrix, and other barcode formats
+
+## MegaTag2 localization
+
+LimelightLib supports MegaTag2, Limelight's gyro-fused localization algorithm. By supplying your robot's current heading each loop, the Limelight fuses IMU data with visual AprilTag observations to produce highly accurate, rotation-stable `Pose2d` estimates you can feed directly into WPILib's pose estimator.
+
+## Data classes
+
+The library includes several public static classes for structured access to camera output:
+
+| Class | Description |
+|---|---|
+| `LimelightResults` | Full parsed JSON output from a single camera frame |
+| `PoseEstimate` | A `Pose2d` with timestamp, latency, and per-tag fiducial data |
+| `RawFiducial` | Per-tag data from the pose estimate array (ID, distance, ambiguity) |
+| `RawDetection` | Neural detector result with class ID and bounding box corners |
+| `RawTarget` | Raw retroreflective contour from the `rawtargets` NetworkTables key |
+| `IMUData` | Limelight internal IMU values (yaw, pitch, roll, gyro, accelerometer) |
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Add LimelightHelpers.java to your WPILib project
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Read your first target and get a pose estimate running fast
+  </Card>
+  <Card title="AprilTag localization" icon="location-dot" href="/guides/apriltag-localization">
+    Use fiducial tags to determine your robot's field position
+  </Card>
+  <Card title="API reference" icon="code" href="/api/targeting-methods">
+    Full reference for every method and data class
+  </Card>
+</CardGroup>

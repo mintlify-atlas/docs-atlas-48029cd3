@@ -1,0 +1,160 @@
+---
+title: "PoseEstimate"
+description: "The PoseEstimate class returned by MegaTag1 and MegaTag2 pose estimation methods."
+---
+
+`PoseEstimate` is the primary result type for robot localization. It bundles a WPILib `Pose2d` with the timestamp, latency, and per-tag details needed to feed WPILib's `SwerveDrivePoseEstimator` or `DifferentialDrivePoseEstimator`.
+
+## Retrieving a PoseEstimate
+
+Four static methods on `LimelightHelpers` return a `PoseEstimate`:
+
+| Method | Alliance | Algorithm |
+|---|---|---|
+| `getBotPoseEstimate_wpiBlue(name)` | Blue | MegaTag1 |
+| `getBotPoseEstimate_wpiRed(name)` | Red | MegaTag1 |
+| `getBotPoseEstimate_wpiBlue_MegaTag2(name)` | Blue | MegaTag2 |
+| `getBotPoseEstimate_wpiRed_MegaTag2(name)` | Red | MegaTag2 |
+
+All four read directly from NetworkTables and do not involve JSON parsing. Use the WPILib Blue coordinate system (`_wpiBlue` variants) for new code — the Red-origin variants exist for compatibility.
+
+<Warning>
+MegaTag2 requires you to call `LimelightHelpers.SetRobotOrientation(name, yawDegrees, ...)` every loop before calling `getBotPoseEstimate_wpiBlue_MegaTag2`. Without a current yaw feed, MegaTag2 pose accuracy degrades significantly.
+</Warning>
+
+## PoseEstimate fields
+
+<ResponseField name="pose" type="Pose2d" required>
+  WPILib `Pose2d` of the robot in the selected alliance coordinate system. Constructed from the `[x, y, yaw]` components of the raw NT array; z, roll, and pitch are discarded.
+</ResponseField>
+
+<ResponseField name="timestampSeconds" type="double" required>
+  Capture timestamp in seconds, already adjusted for latency. Pass this directly to `addVisionMeasurement`.
+
+  <Note>
+    Computed as `(ntTimestamp / 1_000_000.0) - (latency / 1000.0)` where `ntTimestamp` is the NetworkTables server-side microsecond timestamp captured atomically with the pose array, and `latency` is the pipeline latency in milliseconds (index 6 of the raw array).
+  </Note>
+</ResponseField>
+
+<ResponseField name="latency" type="double" required>
+  Pipeline processing latency in milliseconds. This is the `tl` value embedded at index 6 of the raw botpose NT array.
+</ResponseField>
+
+<ResponseField name="tagCount" type="int" required>
+  Number of AprilTags used to compute this pose estimate. A value of 0 means no valid pose was obtained.
+</ResponseField>
+
+<ResponseField name="tagSpan" type="double" required>
+  Distance in meters between the two outermost tags that contributed to this estimate. Larger span values indicate a more geometrically constrained — and therefore more reliable — pose.
+</ResponseField>
+
+<ResponseField name="avgTagDist" type="double" required>
+  Average distance in meters from the camera to all contributing tags. Shorter distances produce more accurate estimates.
+</ResponseField>
+
+<ResponseField name="avgTagArea" type="double" required>
+  Average area of contributing tags as a percentage of the image (0–100). Higher values indicate closer or larger tag appearances.
+</ResponseField>
+
+<ResponseField name="rawFiducials" type="RawFiducial[]" required>
+  Per-tag detail array. Contains one `RawFiducial` entry for each tag that contributed to the pose. Empty (`length == 0`) if the NT array length did not match the expected layout — treat this as an invalid estimate. See [RawFiducial fields](#rawfiducial-fields) below.
+</ResponseField>
+
+<ResponseField name="isMegaTag2" type="boolean" required>
+  `true` if this estimate was produced by the MegaTag2 algorithm (`botpose_orb_wpiblue` / `botpose_orb_wpired`), `false` for MegaTag1.
+</ResponseField>
+
+## RawFiducial fields
+
+`RawFiducial` is embedded inside `PoseEstimate.rawFiducials`. Each entry maps to 7 consecutive values in the raw botpose NT array starting at index 11.
+
+<ResponseField name="id" type="int" required>
+  AprilTag ID.
+</ResponseField>
+
+<ResponseField name="txnc" type="double" required>
+  Horizontal offset from the camera's principal point to the tag center, in degrees. Positive values are to the right.
+</ResponseField>
+
+<ResponseField name="tync" type="double" required>
+  Vertical offset from the camera's principal point to the tag center, in degrees. Positive values are upward.
+</ResponseField>
+
+<ResponseField name="ta" type="double" required>
+  Tag area as a percentage of the image (0–100).
+</ResponseField>
+
+<ResponseField name="distToCamera" type="double" required>
+  3D distance from the camera lens to the tag center, in meters.
+</ResponseField>
+
+<ResponseField name="distToRobot" type="double" required>
+  3D distance from the robot origin to the tag center, in meters.
+</ResponseField>
+
+<ResponseField name="ambiguity" type="double" required>
+  Pose ambiguity ratio for this tag. Values close to 0 are unambiguous; values approaching 1 indicate the solver found two near-equally-plausible poses.
+
+  <Warning>
+    If `rawFiducials[i].ambiguity > 0.1`, the individual-tag pose is likely unreliable. When `tagCount == 1`, consider rejecting the entire `PoseEstimate` if its sole tag has high ambiguity.
+  </Warning>
+</ResponseField>
+
+## Helper methods
+
+### validPoseEstimate
+
+```java
+public static Boolean validPoseEstimate(PoseEstimate pose)
+```
+
+Returns `true` if `pose` is non-null, `pose.rawFiducials` is non-null, and `pose.rawFiducials.length > 0`. Use this as a quick guard before passing a pose to the estimator.
+
+### printPoseEstimate
+
+```java
+public static void printPoseEstimate(PoseEstimate pose)
+```
+
+Prints all `PoseEstimate` fields and the full `rawFiducials` breakdown to standard output. Useful during debugging. Prints `"No PoseEstimate available."` if `pose` is null.
+
+## Code example
+
+```java
+// In your robot's periodic method:
+
+// 1. Keep the gyro yaw fed to MegaTag2 every loop.
+LimelightHelpers.SetRobotOrientation(
+    "limelight",
+    m_gyro.getYaw(), 0,
+    0, 0,
+    0, 0
+);
+
+// 2. Fetch the estimate.
+LimelightHelpers.PoseEstimate estimate =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+
+// 3. Guard against invalid data.
+if (!LimelightHelpers.validPoseEstimate(estimate)) {
+    return;
+}
+
+// 4. Optional: reject high-ambiguity single-tag estimates.
+if (estimate.tagCount == 1 && estimate.rawFiducials.length == 1) {
+    if (estimate.rawFiducials[0].ambiguity > 0.1) {
+        return;
+    }
+}
+
+// 5. Optional: reject estimates that are far away or have poor geometry.
+if (estimate.avgTagDist > 4.0 || estimate.tagCount < 1) {
+    return;
+}
+
+// 6. Feed the estimator.
+m_poseEstimator.addVisionMeasurement(
+    estimate.pose,
+    estimate.timestampSeconds
+);
+```

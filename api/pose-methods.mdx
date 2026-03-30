@@ -1,0 +1,448 @@
+---
+title: "Pose estimation methods"
+description: "Methods for getting robot pose estimates from AprilTag localization, including MegaTag1 and MegaTag2."
+---
+
+## PoseEstimate methods
+
+These methods return a `PoseEstimate` object that bundles the 2D pose with a latency-adjusted timestamp, tag metadata, and per-fiducial details. They are the recommended way to feed vision measurements into WPILib's `SwerveDrivePoseEstimator` or `DifferentialDrivePoseEstimator`.
+
+<Tip>
+  Always call `SetRobotOrientation` before reading MegaTag2 estimates. MegaTag2 requires your robot's current yaw to constrain the pose solve.
+</Tip>
+
+### `getBotPoseEstimate_wpiBlue`
+
+Returns a MegaTag1 pose estimate in the WPILib Blue Alliance coordinate system.
+
+```java
+LimelightHelpers.PoseEstimate estimate =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue("limelight");
+
+if (LimelightHelpers.validPoseEstimate(estimate)) {
+    swervePoseEstimator.addVisionMeasurement(
+        estimate.pose,
+        estimate.timestampSeconds
+    );
+}
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="PoseEstimate">
+  MegaTag1 pose estimate in the WPILib Blue Alliance origin. Fields: `pose` (Pose2d), `timestampSeconds` (latency-adjusted), `latency` (ms), `tagCount`, `tagSpan` (m), `avgTagDist` (m), `avgTagArea` (%), `rawFiducials` (RawFiducial[]), `isMegaTag2` (false).
+</ResponseField>
+
+---
+
+### `getBotPoseEstimate_wpiRed`
+
+Returns a MegaTag1 pose estimate in the WPILib Red Alliance coordinate system.
+
+```java
+LimelightHelpers.PoseEstimate estimate =
+    LimelightHelpers.getBotPoseEstimate_wpiRed("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="PoseEstimate">
+  MegaTag1 pose estimate in the WPILib Red Alliance origin. `isMegaTag2` is `false`.
+</ResponseField>
+
+---
+
+### `getBotPoseEstimate_wpiBlue_MegaTag2`
+
+Returns a MegaTag2 pose estimate in the WPILib Blue Alliance coordinate system. MegaTag2 uses your robot's reported yaw to constrain the pose solve, producing lower rotational ambiguity at the cost of requiring an accurate gyro input.
+
+```java
+// Must be called every loop before reading MegaTag2
+LimelightHelpers.SetRobotOrientation("limelight",
+    gyro.getYaw(), 0, 0, 0, 0, 0);
+
+LimelightHelpers.PoseEstimate mt2 =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+
+if (LimelightHelpers.validPoseEstimate(mt2)) {
+    swervePoseEstimator.addVisionMeasurement(
+        mt2.pose,
+        mt2.timestampSeconds
+    );
+}
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="PoseEstimate">
+  MegaTag2 pose estimate in the WPILib Blue Alliance origin. `isMegaTag2` is `true`.
+</ResponseField>
+
+---
+
+### `getBotPoseEstimate_wpiRed_MegaTag2`
+
+Returns a MegaTag2 pose estimate in the WPILib Red Alliance coordinate system.
+
+```java
+LimelightHelpers.SetRobotOrientation("limelight",
+    gyro.getYaw(), 0, 0, 0, 0, 0);
+
+LimelightHelpers.PoseEstimate mt2 =
+    LimelightHelpers.getBotPoseEstimate_wpiRed_MegaTag2("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="PoseEstimate">
+  MegaTag2 pose estimate in the WPILib Red Alliance origin. `isMegaTag2` is `true`.
+</ResponseField>
+
+---
+
+## 3D pose methods
+
+These methods return a `Pose3d` object. They are useful for 3D visualization and for computing spatial relationships between the robot, camera, and target.
+
+### `getBotPose3d`
+
+Returns the robot's 3D pose in the field-centric coordinate system used internally by the Limelight. This is **not** the WPILib standard origin.
+
+```java
+Pose3d pose = LimelightHelpers.getBotPose3d("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose3d">
+  Robot pose in Limelight field-centric space. Use `getBotPose3d_wpiBlue` for WPILib-compatible coordinates.
+</ResponseField>
+
+---
+
+### `getBotPose3d_wpiBlue`
+
+**(Recommended)** Returns the robot's 3D pose in the WPILib Blue Alliance coordinate system.
+
+```java
+Pose3d pose = LimelightHelpers.getBotPose3d_wpiBlue("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose3d">
+  Robot pose in the WPILib Blue Alliance origin. Origin is the Blue Alliance corner of the field.
+</ResponseField>
+
+---
+
+### `getBotPose3d_wpiRed`
+
+**(Not recommended)** Returns the robot's 3D pose in the WPILib Red Alliance coordinate system.
+
+```java
+Pose3d pose = LimelightHelpers.getBotPose3d_wpiRed("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose3d">
+  Robot pose in the WPILib Red Alliance origin. Prefer `getBotPose3d_wpiBlue` for most use cases.
+</ResponseField>
+
+---
+
+### `getBotPose3d_TargetSpace`
+
+Returns the robot's 3D pose relative to the currently tracked target's coordinate system.
+
+```java
+Pose3d robotRelativeToTarget = LimelightHelpers.getBotPose3d_TargetSpace("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose3d">
+  Robot pose expressed in the target's coordinate frame.
+</ResponseField>
+
+---
+
+### `getCameraPose3d_TargetSpace`
+
+Returns the camera's 3D pose relative to the currently tracked target's coordinate system.
+
+```java
+Pose3d cameraRelativeToTarget = LimelightHelpers.getCameraPose3d_TargetSpace("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose3d">
+  Camera pose expressed in the target's coordinate frame.
+</ResponseField>
+
+---
+
+### `getTargetPose3d_CameraSpace`
+
+Returns the primary target's 3D pose in the camera's coordinate system.
+
+```java
+Pose3d targetInCameraSpace = LimelightHelpers.getTargetPose3d_CameraSpace("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose3d">
+  Target pose expressed in the camera's coordinate frame.
+</ResponseField>
+
+---
+
+### `getTargetPose3d_RobotSpace`
+
+Returns the primary target's 3D pose in the robot's coordinate system.
+
+```java
+Pose3d targetInRobotSpace = LimelightHelpers.getTargetPose3d_RobotSpace("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose3d">
+  Target pose expressed in the robot's coordinate frame.
+</ResponseField>
+
+---
+
+### `getCameraPose3d_RobotSpace`
+
+Returns the camera's 3D pose in the robot's coordinate system.
+
+```java
+Pose3d cameraInRobotSpace = LimelightHelpers.getCameraPose3d_RobotSpace("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose3d">
+  Camera pose expressed in the robot's coordinate frame.
+</ResponseField>
+
+---
+
+## 2D pose methods
+
+These methods return a `Pose2d` derived from the raw 6-element pose array. They use x, y, and yaw only; z, roll, and pitch are discarded.
+
+### `getBotPose2d`
+
+Returns the robot's 2D pose in the Limelight field-centric coordinate system (not WPILib-standard).
+
+```java
+Pose2d pose = LimelightHelpers.getBotPose2d("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose2d">
+  Robot 2D pose in Limelight field-centric space.
+</ResponseField>
+
+---
+
+### `getBotPose2d_wpiBlue`
+
+Returns the robot's 2D pose in the WPILib Blue Alliance coordinate system.
+
+```java
+Pose2d pose = LimelightHelpers.getBotPose2d_wpiBlue("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose2d">
+  Robot 2D pose in the WPILib Blue Alliance origin.
+</ResponseField>
+
+---
+
+### `getBotPose2d_wpiRed`
+
+Returns the robot's 2D pose in the WPILib Red Alliance coordinate system.
+
+```java
+Pose2d pose = LimelightHelpers.getBotPose2d_wpiRed("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="Pose2d">
+  Robot 2D pose in the WPILib Red Alliance origin.
+</ResponseField>
+
+---
+
+## Raw pose array methods
+
+These methods return a 6-element `double[]` in the format `[x, y, z, roll, pitch, yaw]` where translations are in meters and angles are in degrees. They are lower-level than the `Pose3d`/`Pose2d` variants. Use `toPose3D` or `toPose2D` to convert them.
+
+<Note>
+  The deprecated lowercase variants (`getBotpose`, `getBotpose_wpiBlue`, `getBotpose_wpiRed`) are aliases for these methods. Use the capitalized versions shown below.
+</Note>
+
+### `getBotPose`
+
+```java
+double[] pose = LimelightHelpers.getBotPose("limelight");
+// [x, y, z, roll, pitch, yaw]
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  6-element array `[x, y, z, roll, pitch, yaw]` in Limelight field-centric space.
+</ResponseField>
+
+---
+
+### `getBotPose_wpiBlue`
+
+```java
+double[] pose = LimelightHelpers.getBotPose_wpiBlue("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  6-element array `[x, y, z, roll, pitch, yaw]` in the WPILib Blue Alliance origin.
+</ResponseField>
+
+---
+
+### `getBotPose_wpiRed`
+
+```java
+double[] pose = LimelightHelpers.getBotPose_wpiRed("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  6-element array `[x, y, z, roll, pitch, yaw]` in the WPILib Red Alliance origin.
+</ResponseField>
+
+---
+
+### `getBotPose_TargetSpace`
+
+```java
+double[] pose = LimelightHelpers.getBotPose_TargetSpace("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  6-element array representing the robot pose in the target's coordinate frame.
+</ResponseField>
+
+---
+
+### `getCameraPose_TargetSpace`
+
+```java
+double[] pose = LimelightHelpers.getCameraPose_TargetSpace("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  6-element array representing the camera pose in the target's coordinate frame.
+</ResponseField>
+
+---
+
+### `getTargetPose_CameraSpace`
+
+```java
+double[] pose = LimelightHelpers.getTargetPose_CameraSpace("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  6-element array representing the target pose in the camera's coordinate frame.
+</ResponseField>
+
+---
+
+### `getTargetPose_RobotSpace`
+
+```java
+double[] pose = LimelightHelpers.getTargetPose_RobotSpace("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  6-element array representing the target pose in the robot's coordinate frame.
+</ResponseField>
+
+---
+
+## Deprecated methods
+
+<Warning>
+  These lowercase variants are `@Deprecated`. Replace them with the capitalized equivalents.
+</Warning>
+
+| Deprecated | Replacement |
+|---|---|
+| `getBotpose(String)` | `getBotPose(String)` |
+| `getBotpose_wpiBlue(String)` | `getBotPose_wpiBlue(String)` |
+| `getBotpose_wpiRed(String)` | `getBotPose_wpiRed(String)` |

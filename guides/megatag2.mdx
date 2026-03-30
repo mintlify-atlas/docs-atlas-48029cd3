@@ -1,0 +1,179 @@
+---
+title: "MegaTag2 localization"
+description: "Use gyro-fused MegaTag2 pose estimation for highly accurate and robust robot localization."
+---
+
+MegaTag2 combines Limelight's vision data with your robot's gyroscope (IMU) to produce significantly more accurate and robust pose estimates. By fusing the known robot heading from the gyro into the vision solve, MegaTag2 eliminates pose ambiguity — making single-tag poses reliable and multi-tag poses more stable.
+
+Unlike MegaTag1, which solves pose from vision data alone, MegaTag2 constrains the solution to the heading already reported by your gyro. This makes it the recommended localization method for most FRC robots.
+
+<Warning>
+  You **must** call `SetRobotOrientation()` every loop cycle **before** calling any MegaTag2 method. If you forget, Limelight will use a stale heading and produce incorrect or wildly unstable pose estimates.
+</Warning>
+
+## Critical: sending robot orientation
+
+MegaTag2 requires the robot's current yaw angle from your gyroscope. Call `SetRobotOrientation()` at the start of every `robotPeriodic()` cycle:
+
+```java
+// Call this BEFORE any MegaTag2 pose read
+LimelightHelpers.SetRobotOrientation(
+    "limelight",
+    gyro.getYaw(), // yaw in degrees — this is the only value that matters
+    0,             // yaw rate (unused, set to 0)
+    0,             // pitch (unused, set to 0)
+    0,             // pitch rate (unused, set to 0)
+    0,             // roll (unused, set to 0)
+    0              // roll rate (unused, set to 0)
+);
+```
+
+Only the `yaw` parameter is used by MegaTag2. Pass `0` for all other arguments.
+
+If you are running a tight loop and want to avoid the NT flush overhead, use the `_NoFlush` variant (flush manually at the end of the loop instead):
+
+```java
+LimelightHelpers.SetRobotOrientation_NoFlush(
+    "limelight", gyro.getYaw(), 0, 0, 0, 0, 0
+);
+// ... other NT writes ...
+NetworkTableInstance.getDefault().flush();
+```
+
+## Reading MegaTag2 estimates
+
+```java
+// Blue alliance frame (recommended)
+LimelightHelpers.PoseEstimate mt2 =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+
+// Red alliance frame
+LimelightHelpers.PoseEstimate mt2Red =
+    LimelightHelpers.getBotPoseEstimate_wpiRed_MegaTag2("limelight");
+```
+
+Both methods return a `PoseEstimate` object. The `isMegaTag2` field will be `true` for results from these methods. See the [AprilTag localization guide](/guides/apriltag-localization) for a full description of all `PoseEstimate` fields.
+
+## Complete integration with `SwerveDrivePoseEstimator`
+
+<Steps>
+  <Step title="Declare your pose estimator">
+    ```java
+    private final SwerveDrivePoseEstimator poseEstimator =
+        new SwerveDrivePoseEstimator(
+            kinematics,
+            gyro.getRotation2d(),
+            modulePositions,
+            new Pose2d()
+        );
+    ```
+  </Step>
+  <Step title="Update wheel odometry">
+    ```java
+    // Called every loop cycle
+    poseEstimator.update(
+        gyro.getRotation2d(),
+        modulePositions
+    );
+    ```
+  </Step>
+  <Step title="Send robot orientation to Limelight">
+    Call this **before** reading any MegaTag2 estimate:
+
+    ```java
+    LimelightHelpers.SetRobotOrientation(
+        "limelight",
+        poseEstimator.getEstimatedPosition().getRotation().getDegrees(),
+        0, 0, 0, 0, 0
+    );
+    ```
+  </Step>
+  <Step title="Read and validate the MegaTag2 estimate">
+    Reject estimates when the robot is spinning fast — a rapidly changing heading defeats the gyro assist and degrades accuracy:
+
+    ```java
+    LimelightHelpers.PoseEstimate mt2 =
+        LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+
+    // Reject if spinning faster than 720 deg/s
+    boolean robotSpinning = Math.abs(gyro.getRate()) > 720;
+
+    boolean validEstimate = mt2 != null
+        && mt2.tagCount > 0
+        && !robotSpinning;
+    ```
+  </Step>
+  <Step title="Fuse the estimate into the pose estimator">
+    MegaTag2 greatly improves translational accuracy, but heading is already provided by the gyro — use large heading standard deviations to indicate that:
+
+    ```java
+    if (validEstimate) {
+        // Trust vision for X/Y, not for heading (gyro handles heading)
+        Matrix<N3, N1> stdDevs = VecBuilder.fill(0.7, 0.7, 9999999);
+
+        poseEstimator.addVisionMeasurement(
+            mt2.pose,
+            mt2.timestampSeconds,
+            stdDevs
+        );
+    }
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  Reject pose estimates when the robot's rotational velocity is high (e.g., above 720 deg/s). A fast spin means the heading sent to `SetRobotOrientation()` may already be stale by the time the camera frame is processed, which reduces the benefit of gyro fusion and can introduce brief errors.
+</Tip>
+
+## IMU mode configuration
+
+MegaTag2 can operate with an external robot IMU (the default) or with Limelight's built-in IMU. Use `SetIMUMode()` to configure this:
+
+```java
+// Mode 0: External IMU only (default)
+// You provide orientation via SetRobotOrientation()
+LimelightHelpers.SetIMUMode("limelight", 0);
+```
+
+Mode `0` is the default and recommended setting for most FRC robots. It uses only the orientation you provide via `SetRobotOrientation()`, so your robot's primary gyro (navX, Pigeon2, etc.) drives the fusion. Higher modes enable use of the Limelight's internal IMU — refer to the Limelight firmware documentation for the full mode reference.
+
+### IMU assist alpha
+
+When using modes 3 or 4, control how fast the internal IMU converges onto the external assist source:
+
+```java
+// Default is 0.001. Higher = faster convergence.
+LimelightHelpers.SetIMUAssistAlpha("limelight", 0.001);
+```
+
+## Summary
+
+```java
+@Override
+public void robotPeriodic() {
+    // 1. Update wheel odometry
+    poseEstimator.update(gyro.getRotation2d(), modulePositions);
+
+    // 2. Send robot orientation BEFORE reading MegaTag2
+    LimelightHelpers.SetRobotOrientation(
+        "limelight",
+        poseEstimator.getEstimatedPosition().getRotation().getDegrees(),
+        0, 0, 0, 0, 0
+    );
+
+    // 3. Read and validate
+    LimelightHelpers.PoseEstimate mt2 =
+        LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+
+    if (mt2 != null
+            && mt2.tagCount > 0
+            && Math.abs(gyro.getRate()) < 720) {
+
+        poseEstimator.addVisionMeasurement(
+            mt2.pose,
+            mt2.timestampSeconds,
+            VecBuilder.fill(0.7, 0.7, 9999999)
+        );
+    }
+}
+```

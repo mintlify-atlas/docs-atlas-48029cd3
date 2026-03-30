@@ -1,0 +1,113 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "LimelightLib for WPILib Java",
+  "projectDescription": "A single-file Java helper library for integrating Limelight vision cameras into FRC robots using WPILib and NetworkTables.",
+  "theme": "luma",
+  "primaryColor": "#00C853",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/networktables",
+              "concepts/pipelines",
+              "concepts/coordinate-systems"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/apriltag-localization",
+              "guides/megatag2",
+              "guides/neural-networks",
+              "guides/retroreflective",
+              "guides/multi-camera"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Data Classes",
+            "pages": [
+              "api/pose-estimate",
+              "api/limelight-results",
+              "api/raw-types"
+            ]
+          },
+          {
+            "group": "Methods",
+            "pages": [
+              "api/targeting-methods",
+              "api/pose-methods",
+              "api/configuration-methods",
+              "api/utility-methods"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "AprilTag/Fiducial tracking with full 3D pose estimation",
+    "MegaTag2 robot localization using gyro-fused pose estimation",
+    "Neural network pipeline support (classifier and detector)",
+    "Color and retroreflective target tracking",
+    "Barcode detection (QR codes, DataMatrix, etc.)",
+    "Built-in IMU data access for robot orientation",
+    "WPILib Pose2d/Pose3d integration for odometry",
+    "NetworkTables-based communication with zero configuration",
+    "LED, stream mode, and camera crop control",
+    "USB port forwarding for tethered connections"
+  ],
+  "publicApiSurface": [
+    "LimelightHelpers.getTV(String limelightName)",
+    "LimelightHelpers.getTX(String limelightName)",
+    "LimelightHelpers.getTY(String limelightName)",
+    "LimelightHelpers.getBotPoseEstimate_wpiBlue(String limelightName)",
+    "LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(String limelightName)",
+    "LimelightHelpers.getBotPoseEstimate_wpiRed(String limelightName)",
+    "LimelightHelpers.getBotPoseEstimate_wpiRed_MegaTag2(String limelightName)",
+    "LimelightHelpers.getBotPose3d_wpiBlue(String limelightName)",
+    "LimelightHelpers.SetRobotOrientation(String limelightName, double yaw, ...)",
+    "LimelightHelpers.getLatestResults(String limelightName)",
+    "LimelightHelpers.getRawFiducials(String limelightName)",
+    "LimelightHelpers.getRawDetections(String limelightName)",
+    "LimelightHelpers.getRawTargets(String limelightName)",
+    "LimelightHelpers.setPipelineIndex(String limelightName, int pipelineIndex)",
+    "LimelightHelpers.setLEDMode_ForceOn(String limelightName)",
+    "LimelightHelpers.setCameraPose_RobotSpace(String limelightName, ...)",
+    "LimelightHelpers.SetFiducialIDFiltersOverride(String limelightName, int[] validIDs)",
+    "LimelightHelpers.SetIMUMode(String limelightName, int mode)",
+    "LimelightHelpers.getIMUData(String limelightName)",
+    "LimelightHelpers.setupPortForwardingUSB(int usbIndex)",
+    "LimelightHelpers.toPose3D(double[] inData)",
+    "LimelightHelpers.toPose2D(double[] inData)",
+    "LimelightResults",
+    "PoseEstimate",
+    "RawFiducial",
+    "RawDetection",
+    "RawTarget",
+    "IMUData",
+    "LimelightTarget_Fiducial",
+    "LimelightTarget_Retro",
+    "LimelightTarget_Detector",
+    "LimelightTarget_Classifier",
+    "LimelightTarget_Barcode"
+  ]
+}

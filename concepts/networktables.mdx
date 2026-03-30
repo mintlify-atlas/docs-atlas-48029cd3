@@ -1,0 +1,116 @@
+---
+title: "NetworkTables"
+description: "How LimelightLib communicates with your Limelight camera over NetworkTables."
+---
+
+LimelightLib uses WPILib's NetworkTables to communicate with Limelight cameras over the robot network. Every public method in `LimelightHelpers` takes a `limelightName` string parameter that maps directly to the NetworkTables table name.
+
+## Camera naming
+
+Pass the name you configured in the Limelight web UI — for example, `"limelight"`, `"limelight-front"`, or `"limelight-back"`. Passing `""` or `null` defaults to `"limelight"`:
+
+```java
+// From LimelightHelpers.java
+static final String sanitizeName(String name) {
+    if ("".equals(name) || name == null) {
+        return "limelight";
+    }
+    return name;
+}
+```
+
+<Tip>
+When using multiple cameras, always pass the full hostname you assigned in the Limelight web UI (e.g., `"limelight-front"`, `"limelight-back"`). This maps directly to the NetworkTables table name and keeps data from each camera separate.
+</Tip>
+
+## Key NetworkTables entries
+
+The library reads and writes specific NT entries on each camera's table. The entries below are the most commonly used.
+
+### Read entries
+
+| Entry | Type | Description |
+|---|---|---|
+| `tv` | `double` | Target valid. `1.0` = has a target, `0.0` = no target |
+| `tx` | `double` | Horizontal offset from crosshair to target, in degrees |
+| `ty` | `double` | Vertical offset from crosshair to target, in degrees |
+| `ta` | `double` | Target area as a percentage of the image (0–100) |
+| `botpose_wpiblue` | `double[]` | Robot pose array in WPILib Blue Alliance coordinates |
+| `botpose_wpired` | `double[]` | Robot pose array in WPILib Red Alliance coordinates |
+| `botpose_orb_wpiblue` | `double[]` | MegaTag2 pose array in Blue Alliance coordinates |
+| `botpose_orb_wpired` | `double[]` | MegaTag2 pose array in Red Alliance coordinates |
+| `json` | `string` | Full JSON results dump — all targets, poses, and metadata |
+| `imu` | `double[]` | IMU data array: `[robotYaw, roll, pitch, yaw, gyroX, gyroY, gyroZ, accelX, accelY, accelZ]` |
+| `hb` | `double` | Heartbeat counter — increments once per frame |
+| `rawfiducials` | `double[]` | Raw AprilTag/fiducial detection array (7 values per tag) |
+| `rawdetections` | `double[]` | Raw neural detector results (12 values per detection) |
+| `rawtargets` | `double[]` | Raw target contour results (3 values per contour) |
+
+### Write entries
+
+| Entry | Type | Description |
+|---|---|---|
+| `pipeline` | `double` | Active pipeline index (0–9) |
+| `ledMode` | `double` | LED mode: `0` = pipeline control, `1` = off, `2` = blink, `3` = on |
+| `stream` | `double` | Stream mode: `0` = standard, `1` = PiP main, `2` = PiP secondary |
+| `crop` | `double[]` | Camera crop window: `[xMin, xMax, yMin, yMax]` (–1 to 1) |
+| `robot_orientation_set` | `double[]` | Robot orientation for MegaTag2: `[yaw, yawRate, pitch, pitchRate, roll, rollRate]` |
+
+## Entry caching
+
+The library caches `DoubleArrayEntry` objects in a `ConcurrentHashMap` keyed by `"tableName/entryName"`. Entries are created once on first access and reused on every subsequent call, which avoids the overhead of repeated NT lookups:
+
+```java
+private static final Map<String, DoubleArrayEntry> doubleArrayEntries = new ConcurrentHashMap<>();
+
+public static DoubleArrayEntry getLimelightDoubleArrayEntry(String tableName, String entryName) {
+    String key = tableName + "/" + entryName;
+    return doubleArrayEntries.computeIfAbsent(key, k -> {
+        NetworkTable table = getLimelightNTTable(tableName);
+        return table.getDoubleArrayTopic(entryName).getEntry(new double[0]);
+    });
+}
+```
+
+This is used internally for all botpose and PoseEstimate reads.
+
+## Flushing
+
+`LimelightHelpers.Flush()` calls `NetworkTableInstance.getDefault().flush()` to force queued writes to be sent immediately. The library calls this automatically inside `SetRobotOrientation()` to ensure the camera receives the latest robot heading before the next MegaTag2 solve:
+
+```java
+public static void Flush() {
+    NetworkTableInstance.getDefault().flush();
+}
+```
+
+If you are calling `SetRobotOrientation()` at high frequency and do not want to flush on every call, use `SetRobotOrientation_NoFlush()` instead and flush manually at the end of your control loop.
+
+## Using LimelightHelpers vs. raw NetworkTables
+
+You can read from NetworkTables directly, but LimelightHelpers handles name sanitization, type defaults, and entry caching for you.
+
+<CodeGroup>
+
+```java LimelightHelpers (recommended)
+// Reads "tx" from the "limelight-front" table
+double tx = LimelightHelpers.getTX("limelight-front");
+
+// Reads "tv" and returns a boolean
+boolean hasTarget = LimelightHelpers.getTV("limelight-front");
+
+// Writes the pipeline index
+LimelightHelpers.setPipelineIndex("limelight-front", 2);
+```
+
+```java Raw NetworkTables
+NetworkTable table = NetworkTableInstance.getDefault().getTable("limelight-front");
+
+double tx = table.getEntry("tx").getDouble(0.0);
+boolean hasTarget = table.getEntry("tv").getDouble(0.0) == 1.0;
+
+table.getEntry("pipeline").setDouble(2);
+NetworkTableInstance.getDefault().flush();
+```
+
+</CodeGroup>

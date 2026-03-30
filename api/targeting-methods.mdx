@@ -1,0 +1,531 @@
+---
+title: "Targeting methods"
+description: "Methods for reading target detection data from your Limelight camera."
+---
+
+## `getTV`
+
+Returns whether the camera currently sees a valid target.
+
+```java
+boolean hasTarget = LimelightHelpers.getTV("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table. Pass an empty string `""` to use the default `"limelight"` table.
+</ParamField>
+
+<ResponseField name="returns" type="boolean">
+  `true` if a valid target is present, `false` otherwise.
+</ResponseField>
+
+---
+
+## `getTX`
+
+Returns the horizontal offset from the configured crosshair to the primary target, in degrees.
+
+```java
+double tx = LimelightHelpers.getTX("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Horizontal offset angle in degrees. Negative values are to the left of the crosshair.
+</ResponseField>
+
+---
+
+## `getTY`
+
+Returns the vertical offset from the configured crosshair to the primary target, in degrees.
+
+```java
+double ty = LimelightHelpers.getTY("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Vertical offset angle in degrees. Negative values are below the crosshair.
+</ResponseField>
+
+---
+
+## `getTXNC`
+
+Returns the horizontal offset from the principal pixel to the primary target, in degrees. This is the most accurate 2D angular metric when using a calibrated camera and you do not need adjustable crosshair functionality.
+
+```java
+double txnc = LimelightHelpers.getTXNC("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Horizontal offset in degrees from the principal pixel, with no crosshair adjustment applied.
+</ResponseField>
+
+---
+
+## `getTYNC`
+
+Returns the vertical offset from the principal pixel to the primary target, in degrees. Prefer this over `getTY` for calibrated cameras that do not require a moveable crosshair.
+
+```java
+double tync = LimelightHelpers.getTYNC("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Vertical offset in degrees from the principal pixel, with no crosshair adjustment applied.
+</ResponseField>
+
+---
+
+## `getTA`
+
+Returns the target area as a percentage of the full image (0–100).
+
+```java
+double area = LimelightHelpers.getTA("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Target area as a percentage of the image, from 0 (no target) to 100 (full frame).
+</ResponseField>
+
+---
+
+## `getT2DArray`
+
+Returns an array of 17 targeting metrics in a single NetworkTables read.
+
+```java
+double[] t2d = LimelightHelpers.getT2DArray("limelight");
+// t2d[0]  = targetValid
+// t2d[1]  = targetCount
+// t2d[2]  = targetLatency
+// t2d[3]  = captureLatency
+// t2d[4]  = tx
+// t2d[5]  = ty
+// t2d[6]  = txnc
+// t2d[7]  = tync
+// t2d[8]  = ta
+// t2d[9]  = tid
+// t2d[10] = targetClassIndexDetector
+// t2d[11] = targetClassIndexClassifier
+// t2d[12] = targetLongSidePixels
+// t2d[13] = targetShortSidePixels
+// t2d[14] = targetHorizontalExtentPixels
+// t2d[15] = targetVerticalExtentPixels
+// t2d[16] = targetSkewDegrees
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  A 17-element array: `[targetValid, targetCount, targetLatency, captureLatency, tx, ty, txnc, tync, ta, tid, targetClassIndexDetector, targetClassIndexClassifier, targetLongSidePixels, targetShortSidePixels, targetHorizontalExtentPixels, targetVerticalExtentPixels, targetSkewDegrees]`.
+</ResponseField>
+
+---
+
+## `getTargetCount`
+
+Returns the number of targets currently detected. Reads index 1 of the T2D array.
+
+```java
+int count = LimelightHelpers.getTargetCount("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="int">
+  Number of detected targets. Returns `0` if the T2D array is not the expected length.
+</ResponseField>
+
+---
+
+## `getClassifierClass`
+
+Returns the class name string from the currently running neural classifier pipeline.
+
+```java
+String className = LimelightHelpers.getClassifierClass("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="string">
+  The class name of the current classifier result (e.g. `"cube"`, `"cone"`).
+</ResponseField>
+
+---
+
+## `getClassifierClassIndex`
+
+Returns the numeric class index from the currently running neural classifier pipeline. Reads index 11 of the T2D array.
+
+```java
+int classIdx = LimelightHelpers.getClassifierClassIndex("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="int">
+  Class index from the classifier pipeline. Returns `0` if the T2D array is not the expected length.
+</ResponseField>
+
+---
+
+## `getDetectorClass`
+
+Returns the class name string of the primary result from the currently running neural detector pipeline.
+
+```java
+String detectedClass = LimelightHelpers.getDetectorClass("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="string">
+  The class name of the primary detector result.
+</ResponseField>
+
+---
+
+## `getDetectorClassIndex`
+
+Returns the numeric class index of the primary result from the currently running neural detector pipeline. Reads index 10 of the T2D array.
+
+```java
+int detectorIdx = LimelightHelpers.getDetectorClassIndex("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="int">
+  Class index from the detector pipeline. Returns `0` if the T2D array is not the expected length.
+</ResponseField>
+
+---
+
+## `getLatency_Pipeline`
+
+Returns the pipeline processing latency contribution in milliseconds.
+
+```java
+double pipelineLatencyMs = LimelightHelpers.getLatency_Pipeline("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Pipeline processing latency in milliseconds.
+</ResponseField>
+
+---
+
+## `getLatency_Capture`
+
+Returns the image capture latency in milliseconds.
+
+```java
+double captureLatencyMs = LimelightHelpers.getLatency_Capture("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Capture latency in milliseconds.
+</ResponseField>
+
+---
+
+## `getCurrentPipelineIndex`
+
+Returns the index of the currently active pipeline (0–9).
+
+```java
+double pipelineIndex = LimelightHelpers.getCurrentPipelineIndex("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Active pipeline index, between 0 and 9 inclusive.
+</ResponseField>
+
+---
+
+## `getCurrentPipelineType`
+
+Returns a string describing the active pipeline type.
+
+```java
+String pipelineType = LimelightHelpers.getCurrentPipelineType("limelight");
+// e.g. "retro", "apriltag", "neuraldetector", "neuralclassifier"
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="string">
+  Pipeline type identifier string (e.g. `"retro"`, `"apriltag"`).
+</ResponseField>
+
+---
+
+## `getJSONDump`
+
+Returns the full JSON results string published by the Limelight each frame.
+
+```java
+String json = LimelightHelpers.getJSONDump("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="string">
+  Raw JSON string containing all current pipeline results.
+</ResponseField>
+
+---
+
+## `getLatestResults`
+
+Parses the JSON results dump and returns a `LimelightResults` object. Includes parse timing if `profileJSON` is enabled.
+
+```java
+LimelightHelpers.LimelightResults results = LimelightHelpers.getLatestResults("limelight");
+
+if (results.error == null) {
+    double tx = results.tx;
+    LimelightHelpers.LimelightTarget_Fiducial[] tags = results.targets_Fiducials;
+}
+```
+
+<Warning>
+  JSON parsing adds latency. Prefer direct NT getters (`getTV`, `getTX`, etc.) or `getT2DArray` for time-critical loops.
+</Warning>
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="LimelightResults">
+  Parsed results object. Check `results.error` for a non-null value before using results.
+</ResponseField>
+
+---
+
+## `getFiducialID`
+
+Returns the ID of the primary tracked fiducial/AprilTag.
+
+```java
+double tagId = LimelightHelpers.getFiducialID("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Fiducial ID of the primary tracked AprilTag, or `0` if none.
+</ResponseField>
+
+---
+
+## `getNeuralClassID`
+
+Returns the neural classifier class ID string for the primary result.
+
+```java
+String classId = LimelightHelpers.getNeuralClassID("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="string">
+  Neural classifier class ID string.
+</ResponseField>
+
+---
+
+## `getHeartbeat`
+
+Returns a counter that increments once per frame. Use this to verify the camera is connected and actively publishing.
+
+```java
+double hb = LimelightHelpers.getHeartbeat("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double">
+  Heartbeat counter. Rolls over at some large value. If it stops changing, the camera may be disconnected.
+</ResponseField>
+
+---
+
+## `getTargetColor`
+
+Returns the average color observed under the crosshair region as a BGR array.
+
+```java
+double[] color = LimelightHelpers.getTargetColor("limelight");
+double blue  = color[0];
+double green = color[1];
+double red   = color[2];
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  Three-element array in BGR order: `[Blue, Green, Red]`.
+</ResponseField>
+
+---
+
+## `getRawBarcodeData`
+
+Returns decoded data strings from all barcodes detected in the current frame.
+
+```java
+String[] barcodes = LimelightHelpers.getRawBarcodeData("limelight");
+for (String data : barcodes) {
+    System.out.println("Decoded: " + data);
+}
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="string[]">
+  Array of decoded barcode content strings. Empty array if no barcodes are detected.
+</ResponseField>
+
+---
+
+## `getCornerCoordinates`
+
+Returns the corner coordinates of the primary detected target as a flat array of alternating x/y values. Requires **Send Contours** to be enabled in the Limelight Output tab.
+
+```java
+double[] corners = LimelightHelpers.getCornerCoordinates("limelight");
+// corners = [x0, y0, x1, y1, x2, y2, x3, y3, ...]
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  Flat array of corner coordinates in `[x0, y0, x1, y1, ...]` order. Empty if no target or Send Contours is disabled.
+</ResponseField>
+
+---
+
+## `getRawFiducials`
+
+Returns low-latency raw AprilTag detection results directly from NetworkTables, bypassing JSON parsing.
+
+```java
+LimelightHelpers.RawFiducial[] fiducials = LimelightHelpers.getRawFiducials("limelight");
+for (LimelightHelpers.RawFiducial f : fiducials) {
+    System.out.println("Tag ID: " + f.id + ", dist: " + f.distToCamera);
+}
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="RawFiducial[]">
+  Array of `RawFiducial` objects. Each contains: `id`, `txnc`, `tync`, `ta`, `distToCamera`, `distToRobot`, `ambiguity`. Returns an empty array if data is malformed.
+</ResponseField>
+
+---
+
+## `getRawDetections`
+
+Returns low-latency raw neural detector results directly from NetworkTables, bypassing JSON parsing.
+
+```java
+LimelightHelpers.RawDetection[] detections = LimelightHelpers.getRawDetections("limelight");
+for (LimelightHelpers.RawDetection d : detections) {
+    System.out.println("Class: " + d.classId + ", txnc: " + d.txnc);
+}
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="RawDetection[]">
+  Array of `RawDetection` objects. Each contains: `classId`, `txnc`, `tync`, `ta`, and four corner points (`corner0_X/Y` through `corner3_X/Y`). Returns an empty array if data is malformed.
+</ResponseField>
+
+---
+
+## `getRawTargets`
+
+Returns low-latency raw target contour results directly from NetworkTables. Returns ungrouped contours in normalized screen space (−1 to 1).
+
+```java
+LimelightHelpers.RawTarget[] targets = LimelightHelpers.getRawTargets("limelight");
+for (LimelightHelpers.RawTarget t : targets) {
+    System.out.println("txnc: " + t.txnc + ", tync: " + t.tync);
+}
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="RawTarget[]">
+  Array of `RawTarget` objects (up to 3). Each contains: `txnc`, `tync`, `ta`. Returns an empty array if data is malformed.
+</ResponseField>

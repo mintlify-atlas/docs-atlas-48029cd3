@@ -1,0 +1,121 @@
+---
+title: "Pipelines"
+description: "Understanding Limelight pipeline types and how to switch between them at runtime."
+---
+
+A Limelight pipeline defines how the camera processes each frame — which algorithm runs, what targets are reported, and how pose data is computed. You configure pipelines in the Limelight web UI and switch between them from your robot code at runtime.
+
+## Pipeline slots
+
+Limelight supports up to 10 pipelines, indexed 0 through 9. Each slot is configured independently in the web UI. You can assign a different algorithm type to each slot:
+
+| Type | Description |
+|---|---|
+| Retroreflective / color | Tracks bright retroreflective tape or colored regions |
+| AprilTag / fiducial | Detects and solves pose for AprilTag markers |
+| Neural classifier | Runs an image classifier neural network |
+| Neural detector | Runs an object detection neural network |
+| Barcode | Decodes QR codes, Data Matrix, and other barcodes |
+
+## Switching pipelines at runtime
+
+Use `setPipelineIndex` to switch the active pipeline by index:
+
+```java
+// Switch to pipeline 0
+LimelightHelpers.setPipelineIndex("limelight", 0);
+
+// Switch to pipeline 2 (e.g., a neural detector pipeline)
+LimelightHelpers.setPipelineIndex("limelight", 2);
+```
+
+This writes to the `pipeline` NetworkTables entry on the camera's table.
+
+## Reading pipeline state
+
+```java
+// Returns the active pipeline index as a double (0.0–9.0)
+double index = LimelightHelpers.getCurrentPipelineIndex("limelight");
+
+// Returns a string like "retro", "apriltag", "neuralclassifier",
+// "neuraldetector", or "barcode"
+String type = LimelightHelpers.getCurrentPipelineType("limelight");
+```
+
+`getCurrentPipelineIndex` reads from the `getpipe` NT entry, and `getCurrentPipelineType` reads from `getpipetype`.
+
+## AprilTag-specific controls
+
+### Priority tag ID
+
+When multiple AprilTags are visible, use `setPriorityTagID` to tell the Limelight which tag to prioritize for `tx`, `ty`, and single-tag pose output:
+
+```java
+LimelightHelpers.setPriorityTagID("limelight", 4);
+```
+
+This writes to the `priorityid` NT entry.
+
+### Fiducial ID filter
+
+Use `SetFiducialIDFiltersOverride` to limit which tag IDs are used for robot localization. Tags not in the list are detected but ignored for pose estimation:
+
+```java
+// Only use tags 1, 2, 3, and 4 for localization
+int[] allowedTags = {1, 2, 3, 4};
+LimelightHelpers.SetFiducialIDFiltersOverride("limelight", allowedTags);
+```
+
+### Detection downscaling
+
+`SetFiducialDownscalingOverride` controls how much the image is downscaled before AprilTag detection. Higher downscale factors improve CPU performance but may reduce detection range:
+
+```java
+// Let the pipeline setting control downscale (default)
+LimelightHelpers.SetFiducialDownscalingOverride("limelight", 0.0f);
+
+// Force 2× downscale
+LimelightHelpers.SetFiducialDownscalingOverride("limelight", 2.0f);
+```
+
+Valid values: `0.0` (pipeline control), `1.0`, `1.5`, `2.0`, `3.0`, `4.0`.
+
+## Target count
+
+`getTargetCount` reads from the `t2d` array (index 1) and returns the number of targets currently detected:
+
+```java
+int count = LimelightHelpers.getTargetCount("limelight");
+```
+
+The full `t2d` array is a 17-element snapshot of targeting metrics for the current frame. You can read it directly with `getT2DArray`:
+
+```java
+double[] t2d = LimelightHelpers.getT2DArray("limelight");
+```
+
+<Accordion title="T2D array field reference">
+
+The `t2d` array contains 17 elements. The library only reads this array when its length is exactly 17.
+
+| Index | Field | Description |
+|---|---|---|
+| 0 | `targetValid` | `1.0` if a valid target is present |
+| 1 | `targetCount` | Number of targets detected |
+| 2 | `targetLatency` | Pipeline processing latency in ms |
+| 3 | `captureLatency` | Capture latency in ms |
+| 4 | `tx` | Horizontal offset from crosshair to target, degrees |
+| 5 | `ty` | Vertical offset from crosshair to target, degrees |
+| 6 | `txnc` | Horizontal offset from principal point to target, degrees |
+| 7 | `tync` | Vertical offset from principal point to target, degrees |
+| 8 | `ta` | Target area as percentage of image |
+| 9 | `tid` | Fiducial ID of the primary target |
+| 10 | `targetClassIndexDetector` | Class index from a neural detector pipeline |
+| 11 | `targetClassIndexClassifier` | Class index from a neural classifier pipeline |
+| 12 | `targetLongSidePixels` | Long side of the target bounding box in pixels |
+| 13 | `targetShortSidePixels` | Short side of the target bounding box in pixels |
+| 14 | `targetHorizontalExtentPixels` | Horizontal extent of target bounding box in pixels |
+| 15 | `targetVerticalExtentPixels` | Vertical extent of target bounding box in pixels |
+| 16 | `targetSkewDegrees` | Target skew in degrees |
+
+</Accordion>

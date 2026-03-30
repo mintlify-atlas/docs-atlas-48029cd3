@@ -1,0 +1,496 @@
+---
+title: "Configuration methods"
+description: "Methods for controlling pipeline selection, LED mode, camera settings, and MegaTag2 orientation."
+---
+
+## Pipeline control
+
+### `setPipelineIndex`
+
+Switches the active pipeline to the specified index (0–9).
+
+```java
+LimelightHelpers.setPipelineIndex("limelight", 2);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="pipelineIndex" type="int" required>
+  Pipeline index to activate. Valid range: 0–9.
+</ParamField>
+
+---
+
+### `setPriorityTagID`
+
+Sets the priority AprilTag ID. When a priority ID is set, the Limelight will prefer that tag when multiple are visible.
+
+```java
+LimelightHelpers.setPriorityTagID("limelight", 7);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="ID" type="int" required>
+  The AprilTag ID to prioritize.
+</ParamField>
+
+---
+
+### `SetFiducialIDFiltersOverride`
+
+Overrides the set of AprilTag IDs used for robot localization. Tags whose IDs are not in this list will be ignored for pose estimation.
+
+```java
+// Only use tags 1, 2, and 7 for localization
+LimelightHelpers.SetFiducialIDFiltersOverride("limelight", new int[]{1, 2, 7});
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="validIDs" type="int[]" required>
+  Array of AprilTag IDs to permit for localization.
+</ParamField>
+
+---
+
+### `SetFiducialDownscalingOverride`
+
+Overrides the downscaling factor applied to the image before AprilTag detection. Higher downscale improves detection speed but may reduce maximum detection range.
+
+```java
+LimelightHelpers.SetFiducialDownscalingOverride("limelight", 2.0f);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="downscale" type="float" required>
+  Downscale factor. Valid values: `0` (use pipeline setting), `1.0`, `1.5`, `2.0`, `3.0`, `4.0`.
+</ParamField>
+
+---
+
+### `SetThrottle`
+
+Sets the frame-processing throttle. The camera processes one frame after skipping the specified number. Set to a value between 100–200 while the robot is disabled to reduce thermal output.
+
+```java
+// Process every frame (default)
+LimelightHelpers.SetThrottle("limelight", 0);
+
+// Reduce heat when disabled
+LimelightHelpers.SetThrottle("limelight", 150);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="throttle" type="int" required>
+  Number of frames to skip between processed frames. `0` = no throttle (process every frame).
+</ParamField>
+
+---
+
+## LED control
+
+### `setLEDMode_PipelineControl`
+
+Sets LED behavior to be controlled by the active pipeline configuration (`ledMode = 0`).
+
+```java
+LimelightHelpers.setLEDMode_PipelineControl("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+---
+
+### `setLEDMode_ForceOff`
+
+Forces the LEDs off regardless of the pipeline setting (`ledMode = 1`).
+
+```java
+LimelightHelpers.setLEDMode_ForceOff("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+---
+
+### `setLEDMode_ForceBlink`
+
+Forces the LEDs to blink continuously (`ledMode = 2`).
+
+```java
+LimelightHelpers.setLEDMode_ForceBlink("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+---
+
+### `setLEDMode_ForceOn`
+
+Forces the LEDs fully on regardless of the pipeline setting (`ledMode = 3`).
+
+```java
+LimelightHelpers.setLEDMode_ForceOn("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+---
+
+## Stream mode
+
+### `setStreamMode_Standard`
+
+Enables the standard side-by-side stream (`stream = 0`). The primary and secondary camera views appear side by side.
+
+```java
+LimelightHelpers.setStreamMode_Standard("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+---
+
+### `setStreamMode_PiPMain`
+
+Enables Picture-in-Picture mode with the secondary stream displayed in the corner of the primary stream (`stream = 1`).
+
+```java
+LimelightHelpers.setStreamMode_PiPMain("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+---
+
+### `setStreamMode_PiPSecondary`
+
+Enables Picture-in-Picture mode with the primary stream displayed in the corner of the secondary stream (`stream = 2`).
+
+```java
+LimelightHelpers.setStreamMode_PiPSecondary("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+---
+
+## Camera geometry
+
+### `setCameraPose_RobotSpace`
+
+Sets the camera's mount position and orientation relative to the robot's center. All translations are in meters; all angles are in degrees.
+
+```java
+// Camera mounted 0.3 m forward, centered, 0.2 m up, tilted 30° down
+LimelightHelpers.setCameraPose_RobotSpace("limelight",
+    0.3,   // forward (m)
+    0.0,   // side (m)
+    0.2,   // up (m)
+    0.0,   // roll (deg)
+    -30.0, // pitch (deg)
+    0.0    // yaw (deg)
+);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="forward" type="double" required>
+  Forward offset from the robot center in meters.
+</ParamField>
+
+<ParamField path="side" type="double" required>
+  Side (lateral) offset from the robot center in meters. Positive is to the left.
+</ParamField>
+
+<ParamField path="up" type="double" required>
+  Vertical offset from the robot center in meters.
+</ParamField>
+
+<ParamField path="roll" type="double" required>
+  Camera roll in degrees.
+</ParamField>
+
+<ParamField path="pitch" type="double" required>
+  Camera pitch in degrees. Negative values tilt the camera downward.
+</ParamField>
+
+<ParamField path="yaw" type="double" required>
+  Camera yaw in degrees relative to the robot's forward direction.
+</ParamField>
+
+---
+
+### `setCropWindow`
+
+Sets the active crop window for the camera image. The crop window in the Limelight UI must be fully open (no UI crop applied) for this to take effect.
+
+Values are normalized: −1.0 is the left/bottom edge, 1.0 is the right/top edge.
+
+```java
+// Crop to the center-left quarter of the image
+LimelightHelpers.setCropWindow("limelight", -1.0, 0.0, -1.0, 1.0);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="cropXMin" type="double" required>
+  Left edge of the crop window. Range: −1.0 to 1.0.
+</ParamField>
+
+<ParamField path="cropXMax" type="double" required>
+  Right edge of the crop window. Range: −1.0 to 1.0.
+</ParamField>
+
+<ParamField path="cropYMin" type="double" required>
+  Bottom edge of the crop window. Range: −1.0 to 1.0.
+</ParamField>
+
+<ParamField path="cropYMax" type="double" required>
+  Top edge of the crop window. Range: −1.0 to 1.0.
+</ParamField>
+
+---
+
+### `setKeystone`
+
+Applies horizontal and vertical keystone correction to the camera image.
+
+```java
+LimelightHelpers.setKeystone("limelight", 0.1, -0.05);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="horizontal" type="double" required>
+  Horizontal keystone correction value. Range: −0.95 to 0.95.
+</ParamField>
+
+<ParamField path="vertical" type="double" required>
+  Vertical keystone correction value. Range: −0.95 to 0.95.
+</ParamField>
+
+---
+
+### `setFiducial3DOffset`
+
+Sets a 3D offset point applied to the fiducial targeting solution, enabling easy targeting of a specific point relative to an AprilTag.
+
+```java
+// Target a point 0.5 m above the AprilTag
+LimelightHelpers.setFiducial3DOffset("limelight", 0.0, 0.0, 0.5);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="offsetX" type="double" required>
+  X offset in meters relative to the fiducial.
+</ParamField>
+
+<ParamField path="offsetY" type="double" required>
+  Y offset in meters relative to the fiducial.
+</ParamField>
+
+<ParamField path="offsetZ" type="double" required>
+  Z offset in meters relative to the fiducial.
+</ParamField>
+
+---
+
+## MegaTag2 orientation
+
+### `SetRobotOrientation`
+
+Sends the robot's current orientation to the Limelight for use by the MegaTag2 localization algorithm. Only `yaw` is used by MegaTag2; set all rate and attitude parameters to `0`. Internally calls `Flush()` to ensure the value reaches the camera before the next pose read.
+
+```java
+// Called each loop iteration before getBotPoseEstimate_wpiBlue_MegaTag2
+LimelightHelpers.SetRobotOrientation("limelight",
+    gyro.getYaw(), // yaw (deg) — required
+    0,             // yawRate — set 0
+    0,             // pitch — set 0
+    0,             // pitchRate — set 0
+    0,             // roll — set 0
+    0              // rollRate — set 0
+);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="yaw" type="double" required>
+  Robot yaw in degrees. 0° = robot facing the Red Alliance wall in the standard FRC field orientation.
+</ParamField>
+
+<ParamField path="yawRate" type="double" required>
+  Angular velocity of yaw in degrees per second. Set to `0` — not currently used by MegaTag2.
+</ParamField>
+
+<ParamField path="pitch" type="double" required>
+  Robot pitch in degrees. Set to `0` — not currently used by MegaTag2.
+</ParamField>
+
+<ParamField path="pitchRate" type="double" required>
+  Angular velocity of pitch in degrees per second. Set to `0`.
+</ParamField>
+
+<ParamField path="roll" type="double" required>
+  Robot roll in degrees. Set to `0` — not currently used by MegaTag2.
+</ParamField>
+
+<ParamField path="rollRate" type="double" required>
+  Angular velocity of roll in degrees per second. Set to `0`.
+</ParamField>
+
+---
+
+### `SetRobotOrientation_NoFlush`
+
+Identical to `SetRobotOrientation` but skips the internal `Flush()` call. Use this when you are batching multiple NT writes and want to flush manually, or when calling from a high-frequency loop where the extra flush overhead is undesirable.
+
+```java
+LimelightHelpers.SetRobotOrientation_NoFlush("limelight",
+    gyro.getYaw(), 0, 0, 0, 0, 0);
+// ... other NT writes ...
+LimelightHelpers.Flush();
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="yaw" type="double" required>
+  Robot yaw in degrees.
+</ParamField>
+
+<ParamField path="yawRate" type="double" required>
+  Angular velocity of yaw. Set to `0`.
+</ParamField>
+
+<ParamField path="pitch" type="double" required>
+  Robot pitch. Set to `0`.
+</ParamField>
+
+<ParamField path="pitchRate" type="double" required>
+  Angular velocity of pitch. Set to `0`.
+</ParamField>
+
+<ParamField path="roll" type="double" required>
+  Robot roll. Set to `0`.
+</ParamField>
+
+<ParamField path="rollRate" type="double" required>
+  Angular velocity of roll. Set to `0`.
+</ParamField>
+
+---
+
+### `SetIMUMode`
+
+Configures the IMU mode used by the MegaTag2 localization algorithm.
+
+```java
+LimelightHelpers.SetIMUMode("limelight", 1);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="mode" type="int" required>
+  IMU mode integer. Mode `0` = external IMU only (use `SetRobotOrientation` to provide heading). Higher modes enable Limelight's internal IMU. See the [MegaTag2 guide](/guides/megatag2#imu-mode-configuration) for usage guidance.
+</ParamField>
+
+---
+
+### `SetIMUAssistAlpha`
+
+Sets the complementary filter alpha for IMU Assist Modes 3 and 4. A higher alpha causes the internal IMU to converge onto the assist source more rapidly.
+
+```java
+// Use default value
+LimelightHelpers.SetIMUAssistAlpha("limelight", 0.001);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="alpha" type="double" required>
+  Complementary filter alpha. Default is `0.001`. Higher values increase convergence speed.
+</ParamField>
+
+---
+
+## Python scripting
+
+### `setPythonScriptData`
+
+Sends an array of doubles to the currently running Python script on the Limelight.
+
+```java
+double[] outData = {1.0, 2.5, 0.0};
+LimelightHelpers.setPythonScriptData("limelight", outData);
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ParamField path="outgoingPythonData" type="double[]" required>
+  Array of doubles to pass to the Python script via the `llrobot` NetworkTables key.
+</ParamField>
+
+---
+
+### `getPythonScriptData`
+
+Returns the output array published by the currently running Python script on the Limelight.
+
+```java
+double[] pythonOut = LimelightHelpers.getPythonScriptData("limelight");
+```
+
+<ParamField path="limelightName" type="string" required>
+  Name of the Limelight NetworkTables table.
+</ParamField>
+
+<ResponseField name="returns" type="double[]">
+  Array of doubles published by the Python script via the `llpython` NetworkTables key.
+</ResponseField>

@@ -1,0 +1,194 @@
+---
+title: "Multi-camera setup"
+description: "Use multiple Limelight cameras simultaneously on the same robot."
+---
+
+Every `LimelightHelpers` method accepts a `limelightName` string that maps directly to the NetworkTables table name for that camera. You can run as many Limelight cameras as your robot's network can support, each operating independently.
+
+## Naming your cameras
+
+Configure each Limelight's hostname in its web UI (Settings > Networking). Choose descriptive names that reflect each camera's position on the robot:
+
+<Tip>
+  Use a consistent naming convention like `"limelight-front"`, `"limelight-back"`, `"limelight-left"`, `"limelight-right"`. Avoid names with spaces. Shorter names reduce NetworkTables overhead.
+</Tip>
+
+```java
+// Each camera is addressed by its hostname
+LimelightHelpers.PoseEstimate front =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight-front");
+
+LimelightHelpers.PoseEstimate back =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight-back");
+```
+
+## Camera pose calibration
+
+<Warning>
+  Accurate camera pose calibration is critical for multi-camera localization. Even a few millimeters of error in the camera's position on the robot will cause the two cameras to disagree about the robot's location, degrading the fused estimate. Measure each camera's offset from the robot's origin carefully and verify with field tests.
+</Warning>
+
+Set each camera's position and orientation relative to the robot center during initialization (once, in `robotInit()`):
+
+```java
+// Forward = positive X, Side = positive Y (left), Up = positive Z
+// Roll, Pitch, Yaw in degrees
+LimelightHelpers.setCameraPose_RobotSpace(
+    "limelight-front",
+    0.30,  // 0.30 m forward of robot center
+    0.00,  // centered left/right
+    0.50,  // 0.50 m above ground
+    0.0,   // roll
+    -30.0, // pitch (angled downward 30°)
+    0.0    // yaw (facing straight ahead)
+);
+
+LimelightHelpers.setCameraPose_RobotSpace(
+    "limelight-back",
+    -0.30, // 0.30 m behind robot center
+    0.00,
+    0.50,
+    0.0,
+    -30.0,
+    180.0  // yaw (facing backward)
+);
+```
+
+## MegaTag2 with multiple cameras
+
+When using MegaTag2, call `SetRobotOrientation()` for each camera separately before reading its estimate:
+
+```java
+double yaw = poseEstimator.getEstimatedPosition().getRotation().getDegrees();
+
+LimelightHelpers.SetRobotOrientation("limelight-front", yaw, 0, 0, 0, 0, 0);
+LimelightHelpers.SetRobotOrientation("limelight-back",  yaw, 0, 0, 0, 0, 0);
+
+LimelightHelpers.PoseEstimate front =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight-front");
+LimelightHelpers.PoseEstimate back =
+    LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight-back");
+```
+
+## Complete multi-camera `robotPeriodic()` pattern
+
+```java
+@Override
+public void robotPeriodic() {
+    // Update wheel odometry
+    poseEstimator.update(gyro.getRotation2d(), modulePositions);
+
+    double yaw = poseEstimator.getEstimatedPosition().getRotation().getDegrees();
+    boolean spinning = Math.abs(gyro.getRate()) > 720;
+
+    // Process each camera
+    processCameraEstimate("limelight-front", yaw, spinning);
+    processCameraEstimate("limelight-back",  yaw, spinning);
+}
+
+private void processCameraEstimate(String name, double yaw, boolean spinning) {
+    LimelightHelpers.SetRobotOrientation(name, yaw, 0, 0, 0, 0, 0);
+
+    LimelightHelpers.PoseEstimate est =
+        LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(name);
+
+    if (!LimelightHelpers.validPoseEstimate(est)) return;
+    if (spinning) return;
+    if (est.tagCount == 0) return;
+
+    // Scale standard deviations by distance — trust less when farther away
+    double stdDev = 0.5 + (est.avgTagDist * 0.1);
+    Matrix<N3, N1> stdDevs = VecBuilder.fill(stdDev, stdDev, 9999999);
+
+    poseEstimator.addVisionMeasurement(
+        est.pose,
+        est.timestampSeconds,
+        stdDevs
+    );
+}
+```
+
+## Choosing between competing estimates
+
+When both cameras return a valid estimate, you can select the better one rather than blindly applying both:
+
+```java
+LimelightHelpers.PoseEstimate bestEstimate = pickBestEstimate(front, back);
+
+private LimelightHelpers.PoseEstimate pickBestEstimate(
+        LimelightHelpers.PoseEstimate a,
+        LimelightHelpers.PoseEstimate b) {
+
+    boolean aValid = LimelightHelpers.validPoseEstimate(a) && a.tagCount > 0;
+    boolean bValid = LimelightHelpers.validPoseEstimate(b) && b.tagCount > 0;
+
+    if (!aValid && !bValid) return null;
+    if (!aValid) return b;
+    if (!bValid) return a;
+
+    // Prefer more tags
+    if (a.tagCount != b.tagCount) {
+        return a.tagCount > b.tagCount ? a : b;
+    }
+
+    // Prefer lower ambiguity on the first tag
+    double aAmbiguity = a.rawFiducials.length > 0 ? a.rawFiducials[0].ambiguity : 1.0;
+    double bAmbiguity = b.rawFiducials.length > 0 ? b.rawFiducials[0].ambiguity : 1.0;
+    return aAmbiguity <= bAmbiguity ? a : b;
+}
+```
+
+### `validPoseEstimate()`
+
+Use `LimelightHelpers.validPoseEstimate(pose)` as a quick null-safety check before accessing any field:
+
+```java
+// Returns false if pose is null, rawFiducials is null, or rawFiducials is empty
+if (LimelightHelpers.validPoseEstimate(est)) {
+    // safe to access est.pose, est.rawFiducials, etc.
+}
+```
+
+## Debugging with `printPoseEstimate()`
+
+`printPoseEstimate()` prints a full summary to stdout: timestamp, latency, tag count, span, average distance, average area, and per-fiducial details including ambiguity.
+
+```java
+LimelightHelpers.printPoseEstimate(front);
+// Output example:
+// Pose Estimate Information:
+// Timestamp (Seconds): 245.312
+// Latency: 22.500 ms
+// Tag Count: 2
+// Tag Span: 3.40 meters
+// Average Tag Distance: 2.15 meters
+// Average Tag Area: 4.20% of image
+// Is MegaTag2: true
+//
+// Raw Fiducials Details:
+//  Fiducial #1:
+//   ID: 4
+//   TXNC: -3.20
+//   TYNC: 1.10
+//   TA: 5.20
+//   Distance to Camera: 2.10 meters
+//   Distance to Robot: 2.15 meters
+//   Ambiguity: 0.02
+```
+
+## USB camera port forwarding
+
+For Limelight cameras connected via USB (e.g., Limelight 3A or 3G), set up port forwarding during `robotInit()` so the web interface and video streams are accessible:
+
+```java
+@Override
+public void robotInit() {
+    // Limelight on USB index 0: ports 5800–5809 → 172.29.0.1
+    LimelightHelpers.setupPortForwardingUSB(0);
+
+    // Limelight on USB index 1: ports 5810–5819 → 172.29.1.1
+    LimelightHelpers.setupPortForwardingUSB(1);
+}
+```
+
+Access the web UI at `roboRIO-TEAM-FRC.local:5801` for USB index 0, and `:5811` for USB index 1.
